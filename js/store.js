@@ -70,8 +70,18 @@ state.appVersion = VERSION;
 const listeners = new Set();
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
+let saveHook = null;
+// Синхронизация подписывается сюда, чтобы узнавать о каждом сохранении.
+export function onSave(fn) { saveHook = fn; }
+
 export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.error(e); }
+  saveHook?.();
+}
+
+// Отдельная копия текущих данных (например, перед заменой данными из облака).
+export function backupNow(label) {
+  try { localStorage.setItem(BACKUP_PREFIX + label, JSON.stringify(state)); } catch (e) { /* место закончилось */ }
 }
 
 export function commit(mutator, { render = true } = {}) {

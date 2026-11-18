@@ -3,6 +3,48 @@ import { ui, header } from '../ui.js';
 import { VERSION } from '../version.js';
 import { esc, icon, download, today, toast, fmtTime } from '../util.js';
 import { applyTheme } from '../theme.js';
+import { sync, signInGoogle, signInEmail, signUpEmail, resetPassword, signOutCloud, syncNow, loadCloudBackups, restoreCloudBackup, errText } from '../sync.js';
+
+const STATUS = {
+  loading: 'подключаюсь…', syncing: 'синхронизирую…', synced: 'всё сохранено в облаке',
+  offline: 'нет сети — сохранится, когда появится', error: 'ошибка', signedout: '', off: ''
+};
+const hhmm = (t) => new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+function cloudCard() {
+  if (!sync.configured) return '';
+  let body;
+  if (!sync.ready) {
+    body = `<div class="list-row"><span class="grow muted">${sync.status === 'offline' ? 'Нет сети — облако подключится, когда она появится' : 'Подключаюсь…'}</span></div>`;
+  } else if (!sync.user) {
+    body = `<div class="stack" style="gap:10px;padding:12px 0">
+      <span class="small muted">Войди — и вся статистика будет храниться в облаке: не пропадёт, даже если удалить приложение, и будет одинаковой на телефоне и компьютере.</span>
+      <form class="stack" data-submit="cloudEmail" style="gap:8px">
+        <label class="sr-only" for="cEmail">Email</label><input class="input" id="cEmail" name="email" type="email" autocomplete="username" placeholder="Email" required>
+        <label class="sr-only" for="cPass">Пароль</label><input class="input" id="cPass" name="pass" type="password" autocomplete="current-password" placeholder="Пароль (от 6 символов)" required>
+        <div class="row" style="gap:8px"><button class="btn sm grow" name="mode" value="in">Войти</button><button class="btn light sm grow" name="mode" value="up">Создать аккаунт</button></div>
+        <button type="button" class="btn light sm" data-action="cloudReset" style="background:transparent">Забыли пароль?</button>
+      </form>
+      <span class="label" style="padding-top:4px">или</span>
+      <button class="btn light block" data-action="cloudGoogle">Войти через Google</button>
+      <span class="small muted">На телефоне и компьютере входи одним и тем же способом — иначе это будут два разных аккаунта.</span>
+    </div>`;
+  } else {
+    const st = sync.status === 'error' ? 'ошибка: ' + sync.error : STATUS[sync.status] || '';
+    const last = sync.lastAt ? ' · ' + hhmm(sync.lastAt) : '';
+    const backups = sync.backups == null
+      ? `<div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Копии в облаке</span><span class="small muted">раз в неделю, хранятся 8 недель</span></div><button class="btn light sm" data-action="cloudBackups">Показать</button></div>`
+      : (sync.backups.length ? sync.backups : [{ week: '' }]).map((b) => b.week
+        ? `<div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Копия ${esc(b.week.replace('-W', ', неделя '))}</span><span class="small muted">${b.createdAt ? hhmm(b.createdAt) : ''}${b.device ? ' · ' + esc(b.device) : ''}</span></div><button class="btn light sm" data-action="cloudRestore" data-v="${esc(b.week)}">Вернуть</button></div>`
+        : `<div class="list-row"><span class="grow small muted">Копий пока нет — первая появится после синхронизации</span></div>`).join('');
+    body = `<div class="list-row"><div class="grow stack" style="gap:1px;min-width:0"><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(sync.user.email || sync.user.name || 'Аккаунт')}</span><span class="small ${sync.status === 'error' ? '' : 'muted'}" ${sync.status === 'error' ? 'style="color:var(--bad)"' : ''} role="status">${esc(st + last)}</span></div>
+      <button class="btn light sm" data-action="cloudSync" aria-label="Синхронизировать сейчас">${icon('refresh', 16)}</button></div>
+      ${backups}
+      <div class="list-row"><span class="grow small muted">Выйти: данные останутся на этом устройстве, но перестанут сохраняться в облако</span><button class="btn danger sm" data-action="cloudSignOut">Выйти</button></div>`;
+  }
+  return `<span class="label" style="padding:8px 6px 0">Облако</span>
+  <section class="card" style="gap:0;padding:4px 14px">${body}</section>`;
+}
 
 const ACCENTS = [['#E8613C', 'Оранжевый'], ['#2F6FEB', 'Синий'], ['#1F9D6B', 'Зелёный'], ['#8B5CF6', 'Фиолетовый']];
 const REPO = 'https://github.com/DanikChervinskiy/ritm';
@@ -39,6 +81,8 @@ export function render() {
     <button class="btn sm">Сохранить профиль</button>
   </form>
 
+  ${cloudCard()}
+
   <span class="label" style="padding:8px 6px 0">Внешний вид</span>
   <section class="card" style="gap:0;padding:4px 14px">
     <div class="list-row"><span class="grow" style="font-weight:500">Тема</span>
@@ -68,7 +112,7 @@ export function render() {
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Экспорт</span><span class="small muted">все данные одним файлом JSON</span></div><button class="btn light sm" data-action="exportData">${icon('download', 16)}Скачать</button></div>
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Импорт</span><span class="small muted">заменит текущие данные</span></div>
       <label class="btn light sm" style="cursor:pointer">${icon('upload', 16)}Файл<input type="file" accept="application/json,.json" class="sr-only" data-change="importData"></label></div>
-    ${backups.map((b) => `<div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Копия перед обновлением</span><span class="small muted">данные из версии ${esc(b)}</span></div><button class="btn light sm" data-action="restoreBackup" data-v="${esc(b)}">Вернуть</button></div>`).join('')}
+    ${backups.map((b) => `<div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">${/^\d+\.\d+\.\d+$/.test(b) ? 'Копия перед обновлением' : 'Копия на устройстве'}</span><span class="small muted">${/^\d+\.\d+\.\d+$/.test(b) ? 'данные из версии ' + esc(b) : esc(b)}</span></div><button class="btn light sm" data-action="restoreBackup" data-v="${esc(b)}">Вернуть</button></div>`).join('')}
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Сбросить всё</span><span class="small muted">удалить данные на этом устройстве</span></div><button class="btn danger sm" data-action="resetData">Сбросить</button></div>
   </section>
 
@@ -80,7 +124,30 @@ export function render() {
   </section>`;
 }
 
+const busy = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (e) { console.error(e); toast(errText(e)); } };
+
 export const actions = {
+  cloudGoogle() { busy(signInGoogle); },
+  cloudEmail(form, e) {
+    const email = form.email.value.trim(), pass = form.pass.value;
+    const up = e.submitter?.value === 'up';
+    busy(() => (up ? signUpEmail(email, pass) : signInEmail(email, pass)), up ? 'Аккаунт создан' : '');
+  },
+  cloudReset(el) {
+    const email = el.closest('form').email.value.trim();
+    if (!email) { toast('Сначала впиши email'); return; }
+    busy(() => resetPassword(email), 'Письмо для смены пароля отправлено');
+  },
+  cloudSync() { busy(syncNow); },
+  cloudSignOut() {
+    if (!confirm('Выйти из аккаунта? Данные на этом устройстве останутся.')) return;
+    busy(signOutCloud, 'Вы вышли');
+  },
+  cloudBackups() { busy(loadCloudBackups); },
+  cloudRestore(el) {
+    if (!confirm(`Вернуть данные из копии ${el.dataset.v}? Текущие данные будут заменены (на устройстве сохранится их копия).`)) return;
+    busy(() => restoreCloudBackup(el.dataset.v), 'Данные восстановлены');
+  },
   saveProfile(form) {
     const n = (v) => { const x = parseInt(v, 10); return Number.isFinite(x) ? x : null; };
     commit((s) => { s.profile = { name: form.name.value.trim(), height: n(form.height.value), birthYear: n(form.birthYear.value), sex: form.sex.value }; });
@@ -105,7 +172,10 @@ export const actions = {
     if (restoreBackup(el.dataset.v)) { applyTheme(); toast('Данные восстановлены'); }
   },
   resetData() {
-    if (!confirm('Удалить все данные на этом устройстве? Сначала лучше сделать экспорт.')) return;
+    const msg = sync.user
+      ? 'Удалить все данные? Они удалятся и на этом устройстве, и в облаке (недельные копии в облаке останутся).'
+      : 'Удалить все данные на этом устройстве? Сначала лучше сделать экспорт.';
+    if (!confirm(msg)) return;
     resetAll(); applyTheme(); toast('Данные сброшены');
   }
 };

@@ -5,6 +5,7 @@ import { applyTheme } from './theme.js';
 import { dayProgress, overallRate, activeWorkout, latest, status, setStatus } from './logic.js';
 import { paint as paintRest, restActions } from './rest.js';
 import { VERSION } from './version.js';
+import { sync, initSync, onSyncChange } from './sync.js';
 import * as today from './views/today.js';
 import * as habits from './views/habits.js';
 import * as goals from './views/goals.js';
@@ -38,7 +39,7 @@ function renderSidebar() {
   $side.innerHTML = `
     <div class="row" style="padding:0 6px">
       <span class="avatar" aria-hidden="true">${esc(name.slice(0, 1).toUpperCase())}</span>
-      <div class="grow stack" style="gap:2px"><span style="font-weight:700;font-size:16px">${esc(name)}</span><span class="small muted">версия ${VERSION}</span></div>
+      <div class="grow stack" style="gap:2px"><span style="font-weight:700;font-size:16px">${esc(name)}</span><span class="small muted">версия ${VERSION}${syncBadge()}</span></div>
       <button class="icon-btn close-drawer" data-action="closeMenu" aria-label="Закрыть меню" style="background:var(--bg);border:0">${icon('close', 18)}</button>
     </div>
     <nav aria-label="Меню приложения" class="stack" style="gap:2px">
@@ -54,6 +55,11 @@ function renderSidebar() {
     <div class="stack" style="margin-top:auto;gap:10px">
       <a class="menu-item" href="#/settings" ${cur('settings')} style="${r === 'settings' ? '' : 'background:var(--bg)'};height:52px">${icon('settings')}<span class="grow" style="font-weight:600">Настройки</span>${icon('next', 16)}</a>
     </div>`;
+}
+
+function syncBadge() {
+  if (!sync.user) return '';
+  return { synced: ' · в облаке', syncing: ' · сохраняю…', offline: ' · нет сети', error: ' · ошибка облака' }[sync.status] || '';
 }
 
 function renderTabs() {
@@ -125,6 +131,14 @@ subscribe(render);
 applyTheme();
 render();
 setInterval(gym.tickElapsed, 1000);
+
+// Облако: при смене статуса перерисовываем, но не мешаем вводу текста.
+onSyncChange(() => {
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { renderSidebar(); return; }
+  render();
+});
+initSync();
 
 // Новый день, пока приложение открыто: обновить «сегодня».
 document.addEventListener('visibilitychange', () => { if (!document.hidden) commit(() => {}); });
