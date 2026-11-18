@@ -361,3 +361,11 @@ html.sorting-now { -webkit-user-select: none; user-select: none; }
 .sort-head + .list-row { border-top: 0; }
 .sort-head.empty { display: none; }
 .sort-list.sorting .sort-head.empty { display: flex; }
+
+/* Повтор цели (v0.12.0) */
+.rep-chip { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; padding: 2px 0; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; }
+.rep-chip[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
+/* Цели на «Сегодня» */
+.goal-mini { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; border-top: 1px solid var(--line); }
+.goal-mini:first-of-type { border-top: 0; }
+.goal-sub { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0 2px; }

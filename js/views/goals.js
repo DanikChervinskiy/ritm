@@ -1,8 +1,8 @@
 import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn } from '../ui.js';
-import { today, periodKey, periodTitle, shiftDay, esc, icon, parseNum, plural, parseDate, weekDays, fmtShortDate } from '../util.js';
+import { today, periodKey, periodTitle, shiftDay, esc, icon, parseNum, plural, parseDate, weekDays, fmtShortDate, toast } from '../util.js';
 import { renderGrouped, categorySelect, categoryManager } from '../categories.js';
-import { goalsFor, goalProgress, isGoalDone, HORIZONS, parentOptions } from '../logic.js';
+import { goalsFor, goalProgress, isGoalDone, HORIZONS, parentOptions, REPEAT_TEXT, seriesOf } from '../logic.js';
 
 // Границы календарного периода: весь год, весь месяц, неделя пн–вс, день.
 function bounds(hz, day) {
@@ -42,6 +42,7 @@ export function render() {
     const parent = g.parentId ? state.goals.find((x) => x.id === g.parentId) : null;
     const children = state.goals.filter((x) => x.parentId === g.id).length;
     const linkText = parent ? `→ ${esc(parent.title)}` : children ? `${children} ${plural(children, 'подзадача', 'подзадачи', 'подзадач')}` : '';
+    const rep = `<button type="button" class="rep-chip" data-action="goalRepeat" data-id="${g.id}" aria-pressed="${!!g.repeat}" aria-label="${g.repeat ? 'Повторяется ' + REPEAT_TEXT[g.horizon] + '. Нажми, чтобы сделать одноразовой' : 'Одноразовая. Нажми, чтобы повторять ' + REPEAT_TEXT[g.horizon]}">${icon('refresh', 12)}${g.repeat ? REPEAT_TEXT[g.horizon] : 'один раз'}</button>`;
     const right = g.target
       ? `<div class="row" style="gap:4px">
           <button class="icon-btn" style="width:36px;height:36px" data-action="goalStep" data-id="${g.id}" data-d="-1" aria-label="Минус один">${icon('minus', 16)}</button>
@@ -56,7 +57,7 @@ export function render() {
             ${g.target ? `<span class="small muted" style="white-space:nowrap">${g.current || 0} / ${g.target}</span>` : ''}
           </div>
           ${g.target ? `<div class="bar"><i style="width:${Math.round(goalProgress(g) * 100)}%"></i></div>` : ''}
-          ${linkText ? `<span class="small muted row" style="gap:4px">${parent ? icon('link', 12) : ''}${linkText}</span>` : ''}
+          <div class="row" style="gap:8px;flex-wrap:wrap">${rep}${linkText ? `<span class="small muted row" style="gap:4px">${parent ? icon('link', 12) : ''}${linkText}</span>` : ''}</div>
         </div>
         ${right}
         <button class="icon-btn" style="width:36px;height:36px;border:0;background:transparent" data-action="goalDelete" data-id="${g.id}" aria-label="Удалить: ${esc(g.title)}">${icon('trash', 16)}</button>
@@ -73,6 +74,8 @@ export function render() {
       <label class="field"><span>Категория</span>${categorySelect('goal', edit.categoryId || '')}</label>
       <label class="field"><span>Цель в числах (необязательно)</span><input class="input" name="target" inputmode="numeric" value="${edit.target || ''}" placeholder="без числа"></label>
     </div>
+    <div class="list-row" style="border:0;padding:0;min-height:44px"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Повторять ${REPEAT_TEXT[edit.horizon]}</span><span class="small muted">выполнил — в следующем периоде появится снова</span></div>
+      <button type="button" class="switch" role="switch" aria-checked="${!!edit.repeat}" aria-label="Повторять ${REPEAT_TEXT[edit.horizon]}" data-action="goalRepeat" data-id="${edit.id}"><span></span></button></div>
     <button class="btn">Сохранить</button>
   </form>` : '';
 
@@ -106,6 +109,8 @@ export function render() {
       <button class="icon-btn round ink" aria-label="Добавить" style="width:36px;height:36px">${icon('plus', 16)}</button>
     </div>
     <label class="field"><span>Категория</span>${categorySelect('goal', ui.goalNewCat || '')}</label>
+    <div class="list-row" style="border:0;padding:0;min-height:44px"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Повторять ${REPEAT_TEXT[hz]}</span><span class="small muted">${ui.goalNewRepeat ? 'выполнил — в следующем периоде появится снова' : 'одноразовая'}</span></div>
+      <button type="button" class="switch" role="switch" aria-checked="${!!ui.goalNewRepeat}" aria-label="Повторять ${REPEAT_TEXT[hz]}" data-action="goalNewRepeat"><span></span></button></div>
     <details ${ui.goalForm ? 'open' : ''} data-toggle="goalForm">
       <summary class="small muted" style="cursor:pointer">Число и связь с целью</summary>
       <div class="grid2" style="margin-top:10px">
@@ -129,10 +134,22 @@ export const actions = {
       if (g) g.current = Math.max(0, (g.current || 0) + Number(el.dataset.d));
     });
   },
+  goalNewRepeat() { ui.goalNewRepeat = !ui.goalNewRepeat; commit(() => {}); },
+  // Повтор включается/выключается для всей серии: выключил — новые копии больше не появятся.
+  goalRepeat(el) {
+    const g = state.goals.find((x) => x.id === el.dataset.id);
+    if (!g) return;
+    const on = !g.repeat;
+    commit((s) => {
+      for (const x of s.goals) if (x.horizon === g.horizon && seriesOf(x) === seriesOf(g)) { if (on) x.repeat = true; else delete x.repeat; }
+    });
+    toast(on ? `Будет повторяться ${REPEAT_TEXT[g.horizon]}` : 'Теперь одноразовая');
+  },
   goalDelete(el) {
     const g = state.goals.find((x) => x.id === el.dataset.id);
-    if (!g || !confirm(`Удалить «${g.title}»?`)) return;
+    if (!g || !confirm(g.repeat ? `Удалить «${g.title}»? Повтор тоже выключится — в следующих периодах её не будет.` : `Удалить «${g.title}»?`)) return;
     commit((s) => {
+      if (g.repeat) for (const x of s.goals) if (x.horizon === g.horizon && seriesOf(x) === seriesOf(g)) delete x.repeat;
       s.goals = s.goals.filter((x) => x.id !== g.id);
       for (const c of s.goals) if (c.parentId === g.id) c.parentId = null;
     });
@@ -163,7 +180,7 @@ export const actions = {
     commit((s) => s.goals.push({
       id: uid(), title, horizon: ui.goalsHorizon, period: periodKey(ui.goalsHorizon, ui.goalsDay),
       target: target && target > 0 ? Math.round(target) : null, current: 0, done: false, parentId, created: Date.now(),
-      ...(cat ? { categoryId: cat } : {})
+      ...(cat ? { categoryId: cat } : {}), ...(ui.goalNewRepeat ? { repeat: true } : {})
     }));
     requestAnimationFrame(() => document.getElementById('goalTitle')?.focus());
   }

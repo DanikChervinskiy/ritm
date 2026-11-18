@@ -148,6 +148,36 @@ export function goalProgress(g) {
 export function isGoalDone(g) {
   return g.target ? (g.current || 0) >= g.target : !!g.done;
 }
+// ---------- повтор целей (v0.12.0) ----------
+// g.repeat = true — цель повторяется: в новом периоде (неделя, месяц…) появляется её копия, не выполненная.
+// Все копии одной цели связаны g.seriesId (= id первой цели). id копии детерминированный
+// («серия~период»), поэтому телефон и компьютер не создадут дублей.
+export const REPEAT_TEXT = { day: 'каждый день', week: 'каждую неделю', month: 'каждый месяц', year: 'каждый год' };
+export const seriesOf = (g) => g.seriesId || g.id;
+export function ensureRepeats(s, day = today(), dry = false) {
+  const latest = new Map();
+  for (const g of s.goals) {
+    const k = g.horizon + '|' + seriesOf(g);
+    const cur = latest.get(k);
+    if (!cur || g.period > cur.period) latest.set(k, g);
+  }
+  let n = 0;
+  for (const g of latest.values()) {
+    if (!g.repeat) continue;
+    const p = periodKey(g.horizon, day);
+    if (g.period >= p) continue;
+    const id = seriesOf(g) + '~' + p;
+    if (s.goals.some((x) => x.id === id)) continue;
+    n++;
+    if (dry) continue;
+    s.goals.push({
+      id, title: g.title, horizon: g.horizon, period: p, target: g.target || null, current: 0, done: false,
+      parentId: null, created: g.created || 0, repeat: true, seriesId: seriesOf(g), ...(g.categoryId ? { categoryId: g.categoryId } : {})
+    });
+  }
+  return n;
+}
+
 export const HORIZONS = [
   { id: 'year', name: 'Год', parent: null },
   { id: 'month', name: 'Месяц', parent: 'year' },

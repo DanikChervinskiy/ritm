@@ -2,7 +2,7 @@ import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn, habitBtn, habitIcon } from '../ui.js';
 import { today, weekDays, parseDate, WD_SHORT, fmtLongDate, esc, icon, ring, plural, num } from '../util.js';
 import { renderGrouped } from '../categories.js';
-import { status, showsOn, daysLabel, hasDays, dayProgress, streak, weekCount, goalsFor, isGoalDone, activeWorkout, lastFinishedWorkout, nextTemplate, exerciseName } from '../logic.js';
+import { status, showsOn, daysLabel, hasDays, dayProgress, streak, weekCount, goalsFor, isGoalDone, goalProgress, REPEAT_TEXT, activeWorkout, lastFinishedWorkout, nextTemplate, exerciseName } from '../logic.js';
 
 export function render() {
   const sel = ui.selDay;
@@ -44,6 +44,30 @@ export function render() {
   });
   const tasksDone = tasks.filter(isGoalDone).length;
 
+  // Цели недели и месяца (v0.12.0): отмечать можно прямо здесь.
+  const goalRow = (g) => {
+    const done = isGoalDone(g);
+    const rep = g.repeat ? `<span class="small muted row" style="gap:3px;color:var(--accent)">${icon('refresh', 11)}${REPEAT_TEXT[g.horizon]}</span>` : '';
+    if (g.target) return `<div class="goal-mini">
+        <div class="grow stack" style="gap:5px;min-width:0">
+          <div class="row between" style="gap:8px;align-items:baseline"><span class="${done ? 'done-text' : ''}" style="font-size:14px;font-weight:500">${esc(g.title)}</span><span class="small muted" style="white-space:nowrap">${g.current || 0} / ${g.target}</span></div>
+          <div class="bar"><i style="width:${Math.round(goalProgress(g) * 100)}%"></i></div>${rep}
+        </div>
+        <button class="icon-btn ink" style="width:34px;height:34px" data-action="goalStep" data-id="${g.id}" data-d="1" aria-label="Плюс один: ${esc(g.title)}">${icon('plus', 15)}</button>
+      </div>`;
+    return `<div class="goal-mini">
+        ${checkBtn(done, 'goalToggle', { id: g.id }, (done ? 'Снять отметку: ' : 'Выполнено: ') + g.title, true)}
+        <div class="grow stack" style="gap:1px;min-width:0"><span class="${done ? 'done-text' : ''}" style="font-size:14px;font-weight:500">${esc(g.title)}</span>${rep}</div>
+      </div>`;
+  };
+  const goalBlock = (hz, title) => {
+    const gs = goalsFor(hz, sel).sort((a, b) => Number(isGoalDone(a)) - Number(isGoalDone(b)));
+    if (!gs.length) return '';
+    return `<div class="goal-sub"><a class="label" href="#/goals" data-action="goHorizon" data-h="${hz}">${title}</a><span class="small muted">${gs.filter(isGoalDone).length} / ${gs.length}</span></div>
+      <div>${renderGrouped(gs, 'goal', goalRow, { count: false })}</div>`;
+  };
+  const periodGoals = goalBlock('week', 'Цели недели') + goalBlock('month', 'Цели месяца');
+
   const aw = activeWorkout();
   const lw = lastFinishedWorkout();
   const nt = nextTemplate();
@@ -82,6 +106,7 @@ export function render() {
           <button class="icon-btn round ink" aria-label="Добавить задачу" style="width:36px;height:36px">${icon('plus', 16)}</button>
         </form>
       </section>
+      ${periodGoals ? `<section class="card" aria-label="Цели недели и месяца" style="gap:0;padding-top:8px">${periodGoals}</section>` : ''}
       <section class="card ink" aria-label="Зал" style="min-height:150px">${gym}</section>
     </div>
   </div>`;

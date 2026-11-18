@@ -2,7 +2,7 @@ import { state, subscribe, commit } from './store.js';
 import { ui, setRenderer } from './ui.js';
 import { icon, esc, guessIcon } from './util.js';
 import { applyTheme } from './theme.js';
-import { dayProgress, overallRate, activeWorkout, latest, status, setStatus } from './logic.js';
+import { dayProgress, overallRate, activeWorkout, latest, status, setStatus, ensureRepeats } from './logic.js';
 import { paint as paintRest, restActions } from './rest.js';
 import { VERSION } from './version.js';
 import { sync, initSync, onSyncChange } from './sync.js';
@@ -71,6 +71,8 @@ function renderTabs() {
 
 function render() {
   ui.route = routeFromHash();
+  // Повторяющиеся цели: в новом периоде создаём их копии (один раз).
+  if (ensureRepeats(state, undefined, true)) commit((s) => ensureRepeats(s), { render: false });
   const view = ROUTES[ui.route];
   const scrollY = window.scrollY;
   const focusId = document.activeElement?.id;
