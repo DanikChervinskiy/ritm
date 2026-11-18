@@ -1,4 +1,5 @@
-import { state, commit, exportJSON, replaceAll, resetAll, listBackups, restoreBackup } from '../store.js';
+import { state, commit, exportJSON, replaceAll, resetAll, listBackups, restoreBackup, backupNow } from '../store.js';
+import { isWorkoutsFile, previewWorkouts, mergeWorkouts } from '../importWorkouts.js';
 import { ui, header } from '../ui.js';
 import { VERSION } from '../version.js';
 import { esc, icon, download, today, toast, fmtTime } from '../util.js';
@@ -112,6 +113,8 @@ export function render() {
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Экспорт</span><span class="small muted">все данные одним файлом JSON</span></div><button class="btn light sm" data-action="exportData">${icon('download', 16)}Скачать</button></div>
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Импорт</span><span class="small muted">заменит текущие данные</span></div>
       <label class="btn light sm" style="cursor:pointer">${icon('upload', 16)}Файл<input type="file" accept="application/json,.json" class="sr-only" data-change="importData"></label></div>
+    <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Добавить тренировки из файла</span><span class="small muted">история и программы дописываются к текущим данным, ничего не стирается</span></div>
+      <label class="btn light sm" style="cursor:pointer">${icon('upload', 16)}Файл<input type="file" accept="application/json,.json" class="sr-only" data-change="importWorkouts"></label></div>
     ${backups.map((b) => `<div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">${/^\d+\.\d+\.\d+$/.test(b) ? 'Копия перед обновлением' : 'Копия на устройстве'}</span><span class="small muted">${/^\d+\.\d+\.\d+$/.test(b) ? 'данные из версии ' + esc(b) : esc(b)}</span></div><button class="btn light sm" data-action="restoreBackup" data-v="${esc(b)}">Вернуть</button></div>`).join('')}
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Сбросить всё</span><span class="small muted">удалить данные на этом устройстве</span></div><button class="btn danger sm" data-action="resetData">Сбросить</button></div>
   </section>
@@ -125,6 +128,24 @@ export function render() {
 }
 
 const busy = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (e) { console.error(e); toast(errText(e)); } };
+
+function addWorkouts(data) {
+  const p = previewWorkouts(state, data);
+  if (!p.workouts) { toast('Эти тренировки уже добавлены'); return; }
+  const fmt = (d) => d.split('-').reverse().join('.');
+  const msg = [
+    `Добавить ${p.workouts} тренировок (${fmt(p.from)} – ${fmt(p.to)})?`,
+    p.newTemplates.length ? `Новые программы: ${p.newTemplates.join(', ')}.` : 'Программы с такими названиями уже есть — их не трогаю.',
+    p.newExercises ? `Новых упражнений: ${p.newExercises}.` : '',
+    p.habit ? `Привычка «${p.habit}» отметится в эти дни.` : 'Будет создана привычка «Тренировка» (3× в неделю) и отмечена в эти дни.',
+    'Текущие данные не стираются.'
+  ].filter(Boolean).join('\n');
+  if (!confirm(msg)) return;
+  backupNow('до импорта тренировок ' + today());
+  let res;
+  commit((s) => { res = mergeWorkouts(s, data); });
+  toast(`Добавлено тренировок: ${res.added}`);
+}
 
 export const actions = {
   cloudGoogle() { busy(signInGoogle); },
@@ -163,9 +184,19 @@ export const actions = {
     if (!f) return;
     try {
       const data = JSON.parse(await f.text());
+      if (isWorkoutsFile(data)) { el.value = ''; return addWorkouts(data); } // файл истории тренировок — дописываем, а не заменяем
       if (!confirm('Заменить текущие данные данными из файла?')) return;
       replaceAll(data); applyTheme(); toast('Данные загружены');
     } catch (e) { toast('Файл не подходит'); }
+  },
+  async importWorkouts(el) {
+    const f = el.files?.[0];
+    el.value = '';
+    if (!f) return;
+    let data;
+    try { data = JSON.parse(await f.text()); } catch (e) { toast('Файл не подходит'); return; }
+    if (!isWorkoutsFile(data)) { toast('Это не файл с тренировками'); return; }
+    addWorkouts(data);
   },
   restoreBackup(el) {
     if (!confirm(`Вернуть данные из копии версии ${el.dataset.v}? Текущие данные будут заменены.`)) return;

@@ -109,7 +109,7 @@ function renderTemplates() {
     return `<div class="list-row" style="align-items:flex-start">
       <div class="grow stack" style="gap:3px;min-width:0">
         <span class="row" style="gap:8px;flex-wrap:wrap"><span style="font-weight:700;font-size:16px">${esc(t.name)}</span>${isNext ? '<span class="tag-next">следующая</span>' : ''}</span>
-        <span class="small muted">${exs ? esc(exs) : 'упражнений пока нет'}</span>
+        <span class="small muted clamp2">${exs ? esc(exs) : 'упражнений пока нет'}</span>
         <span class="small muted">${t.items.length} ${plural(t.items.length, 'упражнение', 'упражнения', 'упражнений')} · ${last ? 'была ' + fmtShortDate(last.date) : 'ещё не делал'}${habit ? ' · привычка «' + esc(habit.name) + '»' : ''}</span>
       </div>
       <button class="icon-btn" style="width:40px;height:40px" data-action="tplEdit" data-id="${t.id}" aria-label="Изменить программу: ${esc(t.name)}">${icon('pen', 16)}</button>
