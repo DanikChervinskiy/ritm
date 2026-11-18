@@ -3,6 +3,22 @@ import { ui, header, checkBtn } from '../ui.js';
 import { today, esc, icon, kg, parseNum, fmtDuration, fmtLongDate, fmtShortDate, num, plural, toast } from '../util.js';
 import { activeWorkout, exerciseName, lastSession, bestSet, e1rm, workoutVolume, setStatus, FEELS, plannedWeight, UNITS, UNIT_ORDER, unitOf, nextTemplate, lastTemplateWorkout, guessGymHabit } from '../logic.js';
 import { startRest } from '../rest.js';
+import { onSort } from '../drag.js';
+
+// Перетаскивание упражнений в редакторе программы (порядок и группа).
+onSort('tpl', (order) => {
+  commit((s) => {
+    const t = s.templates.find((x) => x.id === ui.tplEdit);
+    if (!t) return;
+    const old = t.items;
+    t.items = order.map(({ key, group }) => {
+      const it = { ...old[Number(key)] };
+      if (group) it.group = group; else delete it.group;
+      return it;
+    }).filter((it) => it.exerciseId);
+    normalizeTpl(t);
+  });
+});
 
 export const subnav = (cur) => `<nav class="seg" aria-label="Зал">
   <a href="#/gym" ${cur === 'gym' ? 'aria-current="page"' : ''}>Тренировки</a>
@@ -52,7 +68,8 @@ function renderActive(w) {
     const nextRow = addOpts.map((v) => `<button type="button" class="chip sm" data-action="setNextAdd" data-i="${i}" data-v="${v}" aria-pressed="${it.nextAdd === v}">+${kg(v)} ${U.w}</button>`).join('')
       + `<button type="button" class="chip sm" data-action="setNextAdd" data-i="${i}" data-v="custom" aria-pressed="${!!custom}">${custom ? (it.nextAdd > 0 ? '+' : '−') + kg(Math.abs(it.nextAdd)) + ' ' + U.w : 'Другое…'}</button>`;
     const doneAny = it.sets.some((x) => x.done);
-    return `<section class="card" aria-label="${esc(exerciseName(it.exerciseId))}">
+    const groupLabel = it.group && it.group !== w.items[i - 1]?.group ? `<span class="label" style="padding:10px 6px 0">${esc(it.group)}</span>` : '';
+    return `${groupLabel}<section class="card" aria-label="${esc(exerciseName(it.exerciseId))}">
       <div class="row between" style="gap:8px"><h2>${esc(exerciseName(it.exerciseId))}</h2>
         <div class="row" style="gap:4px;flex:none"><button type="button" class="chip sm" data-action="cycleUnit" data-ex="${it.exerciseId}" aria-label="Единица веса: ${U.w}. Нажми, чтобы сменить">${U.w}</button>
         <button class="icon-btn" style="width:36px;height:36px;border:0;background:transparent" data-action="removeItem" data-i="${i}" aria-label="Убрать упражнение">${icon('trash', 16)}</button></div></div>
@@ -106,7 +123,11 @@ function renderTemplates() {
   const cards = state.templates.map((t) => {
     const last = lastTemplateWorkout(t.id);
     const habit = t.habitId ? state.habits.find((h) => h.id === t.habitId) : null;
-    const exs = t.items.map((it) => exerciseName(it.exerciseId)).join(' · ');
+    const gs = tplGroups(t);
+    const exs = gs.length
+      ? [...gs, ''].map((g) => [g, t.items.filter((it) => (it.group || '') === g)]).filter(([, its]) => its.length)
+        .map(([g, its]) => (g ? g + ': ' : '') + its.map((it) => exerciseName(it.exerciseId)).join(' · ')).join(' / ')
+      : t.items.map((it) => exerciseName(it.exerciseId)).join(' · ');
     const isNext = next && next.id === t.id && state.templates.length > 1;
     return `<div class="list-row" style="align-items:flex-start">
       <div class="grow stack" style="gap:3px;min-width:0">
@@ -125,27 +146,69 @@ function renderTemplates() {
   </section>`;
 }
 
+// Группы внутри программы (с v0.10.0): t.groups = ['Грудь', 'Бицепс'], у упражнения it.group.
+// Упражнения всегда лежат по порядку групп; без группы — в конце.
+export const tplGroups = (t) => (Array.isArray(t.groups) ? t.groups : []);
+function normalizeTpl(t) {
+  const gs = tplGroups(t);
+  for (const it of t.items) if (it.group && !gs.includes(it.group)) delete it.group;
+  const rank = (it) => (it.group ? gs.indexOf(it.group) : gs.length);
+  t.items = t.items.map((it, k) => [it, k]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0]);
+}
+// «Грудь + бицепс» → ['Грудь', 'Бицепс']
+function groupsFromName(name) {
+  const parts = String(name || '').split(/\s*(?:\+|,|\/|&|\sи\s)\s*/i).map((x) => x.trim()).filter(Boolean);
+  if (parts.length < 2) return [];
+  return [...new Set(parts.map((x) => x[0].toUpperCase() + x.slice(1)))];
+}
+
 function renderEditor(t) {
   const names = state.exercises.map((e) => `<option value="${esc(e.name)}">`).join('');
   const habits = state.habits.filter((h) => !h.archived);
-  const rows = t.items.map((it, i) => `<div class="list-row" style="gap:8px">
-      <span class="mono small muted" style="width:18px">${i + 1}</span>
+  const gs = tplGroups(t);
+  const target = gs.includes(ui.tplGroup) ? ui.tplGroup : (ui.tplGroup === '' ? '' : gs[gs.length - 1] || '');
+  const row = (it, i) => `<div class="list-row tpl-row" style="gap:8px" data-sort-item="${i}">
+      <span class="drag-handle" data-sort-handle tabindex="0" role="button" aria-label="Переместить: ${esc(exerciseName(it.exerciseId))}. Потяни или нажимай стрелки вверх и вниз">${icon('grip', 16)}</span>
       <span class="grow" style="font-weight:600;min-width:0">${esc(exerciseName(it.exerciseId))}</span>
       <div class="row" style="gap:4px;flex:none" aria-label="Подходы">
         <button type="button" class="icon-btn" style="width:32px;height:32px" data-action="tplSets" data-i="${i}" data-d="-1" ${it.sets > 1 ? '' : 'disabled'} aria-label="Меньше подходов">${icon('minus', 14)}</button>
         <span class="small" style="min-width:52px;text-align:center;font-weight:600">${it.sets} ${plural(it.sets, 'подход', 'подхода', 'подходов')}</span>
         <button type="button" class="icon-btn" style="width:32px;height:32px" data-action="tplSets" data-i="${i}" data-d="1" ${it.sets < 12 ? '' : 'disabled'} aria-label="Больше подходов">${icon('plus', 14)}</button>
       </div>
-      <button type="button" class="icon-btn" style="width:32px;height:32px" data-action="tplMove" data-i="${i}" data-d="-1" ${i ? '' : 'disabled'} aria-label="Выше">${icon('up', 14)}</button>
       <button type="button" class="icon-btn" style="width:32px;height:32px;border:0;background:transparent" data-action="tplRemove" data-i="${i}" aria-label="Убрать упражнение">${icon('trash', 14)}</button>
-    </div>`).join('');
+    </div>`;
+  const head = (g, gi) => {
+    const n = t.items.filter((it) => (it.group || '') === g).length;
+    if (g === '') return `<div class="tpl-head${n ? '' : ' empty'}" data-sort-head=""><span class="label">Без группы</span><span class="mono small muted">${n}</span></div>`;
+    return `<div class="tpl-head" data-sort-head="${esc(g)}">
+      <button type="button" class="tpl-head-name" data-action="tplGroupRename" data-g="${gi}" aria-label="Переименовать группу ${esc(g)}">${esc(g)}</button>
+      <span class="mono small muted">${n}</span><span class="grow"></span>
+      <button type="button" class="icon-btn" style="width:30px;height:30px" data-action="tplGroupMove" data-g="${gi}" ${gi ? '' : 'disabled'} aria-label="Группа выше">${icon('up', 13)}</button>
+      <button type="button" class="icon-btn" style="width:30px;height:30px;border:0;background:transparent" data-action="tplGroupDelete" data-g="${gi}" aria-label="Удалить группу ${esc(g)}">${icon('trash', 13)}</button>
+    </div>`;
+  };
+  let list = '';
+  if (gs.length) {
+    gs.forEach((g, gi) => { list += head(g, gi); t.items.forEach((it, i) => { if (it.group === g) list += row(it, i); }); });
+    list += head('', -1);
+    t.items.forEach((it, i) => { if (!it.group) list += row(it, i); });
+  } else list = t.items.map(row).join('');
+  const suggest = !gs.length ? groupsFromName(t.name) : [];
+  const groupBar = `<div class="row" style="gap:6px;flex-wrap:wrap;padding:8px 0 2px">
+      ${gs.length ? `<span class="small muted">Добавлять в:</span>${gs.map((g) => `<button type="button" class="chip sm" data-action="tplPickGroup" data-g="${esc(g)}" aria-pressed="${target === g}">${esc(g)}</button>`).join('')}<button type="button" class="chip sm" data-action="tplPickGroup" data-g="" aria-pressed="${target === ''}">Без группы</button>` : ''}
+      ${suggest.length ? `<button type="button" class="chip sm" data-action="tplGroupsFromName">${icon('plus', 12)}Группы: ${esc(suggest.join(' · '))}</button>` : ''}
+      <button type="button" class="chip sm" data-action="tplGroupAdd">${icon('plus', 12)}Группа</button>
+    </div>`;
+  const rows = list;
   return `
   ${header('Программа', 'Тренировка заранее', '', { back: '#/gym' })}
   <section class="card" aria-label="Программа тренировки">
     <label class="field"><span>Название</span><input class="input" id="tplName" value="${esc(t.name)}" data-change="tplName" placeholder="Например: Грудь + трицепс" autocomplete="off"></label>
     <div class="stack" style="gap:0">
       <span class="label" style="padding:6px 0">Упражнения</span>
-      ${rows || '<div class="small muted" style="padding:4px 0 8px">Добавь упражнения в том порядке, в котором делаешь</div>'}
+      <div class="tpl-list" data-sortable="tpl">${rows}</div>
+      ${t.items.length ? '<span class="small muted" style="padding:6px 0 0">Зажми упражнение (или потяни за ⋮⋮) и перетащи на нужное место — в том числе в другую группу.</span>' : `<div class="small muted" style="padding:4px 0 8px">${gs.length ? 'Выбери группу ниже и добавь упражнения' : 'Добавь упражнения в том порядке, в котором делаешь. Можно разбить их на группы, например «Грудь» и «Бицепс».'}</div>`}
+      ${groupBar}
     </div>
     <form class="addbar" data-submit="tplAddExercise" style="background:var(--card-2)">
       <label class="sr-only" for="tplEx">Упражнение</label>
@@ -341,7 +404,7 @@ Object.assign(actions, {
     if (!t || !t.items.length) { toast('Сначала добавь упражнения в программу'); return; }
     if (activeWorkout()) { location.hash = '#/gym'; return; }
     ui.tplEdit = null;
-    commit((s) => newWorkout(s, t.name, t.items.map((it) => ({ exerciseId: it.exerciseId, sets: Array.from({ length: it.sets || 3 }, () => ({ w: null, r: null, done: false })) })), t.id));
+    commit((s) => newWorkout(s, t.name, t.items.map((it) => ({ exerciseId: it.exerciseId, ...(it.group ? { group: it.group } : {}), sets: Array.from({ length: it.sets || 3 }, () => ({ w: null, r: null, done: false })) })), t.id));
     if (location.hash !== '#/gym') location.hash = '#/gym';
     window.scrollTo({ top: 0 });
   },
@@ -367,7 +430,10 @@ Object.assign(actions, {
       if (!t) return;
       const ex = findOrCreateExercise(s, name);
       const last = lastSession(ex.id);
-      t.items.push({ exerciseId: ex.id, sets: last ? last.sets.length : 3 });
+      const gs = tplGroups(t);
+      const g = gs.includes(ui.tplGroup) ? ui.tplGroup : (ui.tplGroup === '' ? '' : gs[gs.length - 1] || '');
+      t.items.push({ exerciseId: ex.id, sets: last ? last.sets.length : 3, ...(g ? { group: g } : {}) });
+      normalizeTpl(t);
     });
     requestAnimationFrame(() => document.getElementById('tplEx')?.focus());
   },
@@ -377,13 +443,42 @@ Object.assign(actions, {
       if (it) it.sets = Math.min(12, Math.max(1, (it.sets || 3) + Number(el.dataset.d)));
     });
   },
-  tplMove(el) {
-    commit((s) => {
-      const t = s.templates.find((x) => x.id === ui.tplEdit);
-      const i = Number(el.dataset.i), j = i + Number(el.dataset.d);
-      if (!t || j < 0 || j >= t.items.length) return;
-      [t.items[i], t.items[j]] = [t.items[j], t.items[i]];
-    });
+  tplPickGroup(el) { ui.tplGroup = el.dataset.g; commit(() => {}); requestAnimationFrame(() => document.getElementById('tplEx')?.focus()); },
+  tplGroupAdd() {
+    const t = state.templates.find((x) => x.id === ui.tplEdit);
+    if (!t) return;
+    const name = (prompt('Название группы, например «Грудь» или «Бицепс»') || '').trim();
+    if (!name) return;
+    if (tplGroups(t).some((g) => g.toLowerCase() === name.toLowerCase())) { toast('Такая группа уже есть'); return; }
+    ui.tplGroup = name;
+    commit((s) => { const x = s.templates.find((y) => y.id === ui.tplEdit); const first = !tplGroups(x).length; x.groups = [...tplGroups(x), name]; if (first) x.items.forEach((it) => { it.group = name; }); normalizeTpl(x); });
+  },
+  tplGroupsFromName() {
+    const t = state.templates.find((x) => x.id === ui.tplEdit);
+    const gs = t ? groupsFromName(t.name) : [];
+    if (!gs.length) return;
+    ui.tplGroup = gs[0];
+    commit((s) => { const x = s.templates.find((y) => y.id === ui.tplEdit); x.groups = gs; x.items.forEach((it) => { it.group = gs[0]; }); normalizeTpl(x); });
+  },
+  tplGroupRename(el) {
+    const t = state.templates.find((x) => x.id === ui.tplEdit);
+    const old = tplGroups(t || {})[Number(el.dataset.g)];
+    if (!old) return;
+    const name = (prompt('Новое название группы', old) || '').trim();
+    if (!name || name === old) return;
+    if (tplGroups(t).some((g) => g !== old && g.toLowerCase() === name.toLowerCase())) { toast('Такая группа уже есть'); return; }
+    if (ui.tplGroup === old) ui.tplGroup = name;
+    commit((s) => { const x = s.templates.find((y) => y.id === ui.tplEdit); x.groups = tplGroups(x).map((g) => (g === old ? name : g)); x.items.forEach((it) => { if (it.group === old) it.group = name; }); });
+  },
+  tplGroupMove(el) {
+    const i = Number(el.dataset.g);
+    commit((s) => { const x = s.templates.find((y) => y.id === ui.tplEdit); const gs = [...tplGroups(x)]; if (i < 1 || i >= gs.length) return; [gs[i - 1], gs[i]] = [gs[i], gs[i - 1]]; x.groups = gs; normalizeTpl(x); });
+  },
+  tplGroupDelete(el) {
+    const t = state.templates.find((x) => x.id === ui.tplEdit);
+    const g = tplGroups(t || {})[Number(el.dataset.g)];
+    if (!g || !confirm(`Удалить группу «${g}»? Упражнения останутся в программе без группы.`)) return;
+    commit((s) => { const x = s.templates.find((y) => y.id === ui.tplEdit); x.groups = tplGroups(x).filter((y) => y !== g); x.items.forEach((it) => { if (it.group === g) delete it.group; }); normalizeTpl(x); if (!x.groups.length) delete x.groups; });
   },
   tplRemove(el) { commit((s) => { s.templates.find((x) => x.id === ui.tplEdit)?.items.splice(Number(el.dataset.i), 1); }); },
   tplHabit(el) {

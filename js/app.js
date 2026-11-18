@@ -201,7 +201,7 @@ let pull = { y0: null, d: 0 };
 const PULL_MAX = 110, PULL_GO = 70;
 function ptrReset() { ptr.style.transition = 'transform .2s, opacity .2s'; ptr.style.transform = ''; ptr.style.opacity = ''; pull = { y0: null, d: 0 }; }
 document.addEventListener('touchstart', (e) => {
-  if (window.scrollY > 0 || $side.classList.contains('open') || e.touches.length > 1 || e.target.closest('input,select,textarea,.chips')) { pull.y0 = null; return; }
+  if (window.scrollY > 0 || $side.classList.contains('open') || e.touches.length > 1 || e.target.closest('input,select,textarea,.chips,[data-sortable]')) { pull.y0 = null; return; }
   pull = { y0: e.touches[0].clientY, d: 0 };
   ptr.style.transition = 'none';
 }, { passive: true });

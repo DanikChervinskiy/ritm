@@ -337,3 +337,17 @@ details.after > summary { cursor: pointer; padding: 2px 0; }
 details.card > summary { list-style: none; cursor: pointer; font-weight: 600; }
 details.card > summary::-webkit-details-marker { display: none; }
 svg { flex: none; }
+
+/* Редактор программы: группы и перетаскивание (v0.10.0) */
+.tpl-list { display: flex; flex-direction: column; }
+.tpl-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 10px 0 4px; border-top: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); }
+.tpl-list > .tpl-head:first-child { border-top: 0; padding-top: 2px; }
+.tpl-head.empty { display: none; }
+.tpl-list.sorting .tpl-head.empty { display: flex; }
+.tpl-head-name { border: 0; background: none; padding: 0; font: inherit; font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text); font-weight: 600; cursor: pointer; text-align: left; }
+.tpl-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: box-shadow .15s, transform .15s; background: var(--card); }
+.tpl-row.dragging { position: relative; z-index: 5; transform: scale(1.02); box-shadow: 0 10px 28px rgba(0,0,0,.16); border-radius: 14px; border-color: transparent; padding-left: 8px; padding-right: 8px; margin: 0 -8px; }
+.drag-handle { display: grid; place-items: center; width: 28px; height: 36px; flex: none; color: var(--muted); cursor: grab; touch-action: none; border-radius: 8px; }
+.drag-handle:focus-visible { outline: 2px solid var(--accent); }
+html.sorting-now, html.sorting-now * { cursor: grabbing !important; }
+html.sorting-now { -webkit-user-select: none; user-select: none; }
