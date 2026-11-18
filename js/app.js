@@ -6,6 +6,7 @@ import { dayProgress, overallRate, activeWorkout, latest, status, setStatus } fr
 import { paint as paintRest, restActions } from './rest.js';
 import { VERSION } from './version.js';
 import { sync, initSync, onSyncChange } from './sync.js';
+import { categoryActions } from './categories.js';
 import * as today from './views/today.js';
 import * as habits from './views/habits.js';
 import * as goals from './views/goals.js';
@@ -15,7 +16,7 @@ import * as settings from './views/settings.js';
 import * as stats from './views/stats.js';
 
 const ROUTES = { today, habits, goals, gym, body, stats, settings };
-const actions = { ...restActions, openMenu, closeMenu };
+const actions = { ...restActions, ...categoryActions, openMenu, closeMenu };
 for (const v of Object.values(ROUTES)) Object.assign(actions, v.actions);
 
 const $view = document.getElementById('view');

@@ -1,9 +1,9 @@
 // Офлайн-кэш. VERSION обновляется scripts/release.sh — тогда телефон скачивает новую версию.
-const VERSION = '0.3.2';
+const VERSION = '0.4.0';
 const CACHE = 'ritm-' + VERSION;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css',
-  'js/app.js', 'js/store.js', 'js/util.js', 'js/ui.js', 'js/logic.js', 'js/rest.js', 'js/theme.js', 'js/version.js',
+  'js/app.js', 'js/store.js', 'js/util.js', 'js/ui.js', 'js/logic.js', 'js/rest.js', 'js/theme.js', 'js/version.js', 'js/categories.js',
   'js/views/today.js', 'js/views/habits.js', 'js/views/goals.js', 'js/views/gym.js', 'js/views/body.js', 'js/views/settings.js', 'js/views/stats.js',
   'js/sync.js', 'js/syncdata.js', 'js/firebase-config.js',
   'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'

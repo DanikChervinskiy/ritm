@@ -1,6 +1,7 @@
 import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn, habitBtn, habitIcon } from '../ui.js';
 import { today, weekDays, parseDate, WD_SHORT, fmtLongDate, esc, icon, ring, plural, num } from '../util.js';
+import { renderGrouped } from '../categories.js';
 import { status, dayProgress, streak, weekCount, goalsFor, isGoalDone, activeWorkout, lastFinishedWorkout } from '../logic.js';
 
 export function render() {
@@ -20,7 +21,7 @@ export function render() {
   const habits = state.habits.filter((h) => !h.archived);
   const p = dayProgress(sel);
   const habitRows = habits.length
-    ? habits.map((h) => {
+    ? renderGrouped(habits, 'habit', (h) => {
       const st = status(h.id, sel);
       const s = streak(h.id);
       const meta = h.perWeek < 7 ? `${num(weekCount(h.id, sel), weekCount(h.id, sel) % 1 ? 1 : 0)} из ${h.perWeek} за неделю` : s ? `серия ${s} ${plural(s, 'день', 'дня', 'дней')}` : 'начни серию сегодня';
@@ -30,17 +31,17 @@ export function render() {
           <span class="small muted">${st === 'partial' ? '<span class="part-tag">частично · </span>' : ''}${meta}</span></div>
         ${habitBtn(h, sel, st)}
       </div>`;
-    }).join('')
+    })
     : `<div class="empty">Привычек пока нет. <a href="#/habits">Добавить</a></div>`;
 
   const tasks = goalsFor('day', sel);
-  const taskRows = tasks.map((g) => {
+  const taskRows = renderGrouped(tasks, 'goal', (g) => {
     const done = isGoalDone(g);
     return `<div class="list-row" style="min-height:44px">
       ${checkBtn(done, 'toggleTask', { id: g.id }, (done ? 'Снять отметку: ' : 'Выполнено: ') + g.title, true)}
       <span class="grow ${done ? 'done-text' : ''}" style="font-size:14px;font-weight:500">${esc(g.title)}</span>
     </div>`;
-  }).join('');
+  });
   const tasksDone = tasks.filter(isGoalDone).length;
 
   const aw = activeWorkout();

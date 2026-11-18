@@ -1,6 +1,7 @@
 import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn } from '../ui.js';
 import { today, periodKey, periodTitle, shiftDay, esc, icon, parseNum, plural, parseDate, weekDays, fmtShortDate } from '../util.js';
+import { renderGrouped, categorySelect, categoryManager } from '../categories.js';
 import { goalsFor, goalProgress, isGoalDone, HORIZONS, parentOptions } from '../logic.js';
 
 // Границы календарного периода: весь год, весь месяц, неделя пн–вс, день.
@@ -36,7 +37,7 @@ export function render() {
 
   const tabs = HORIZONS.map((h) => `<button role="tab" aria-selected="${h.id === hz}" data-action="goalsTab" data-h="${h.id}">${h.name}</button>`).join('');
 
-  const rows = items.map((g) => {
+  const rows = renderGrouped(items, 'goal', (g) => {
     const done = isGoalDone(g);
     const parent = g.parentId ? state.goals.find((x) => x.id === g.parentId) : null;
     const children = state.goals.filter((x) => x.parentId === g.id).length;
@@ -51,7 +52,7 @@ export function render() {
         ${g.target ? '' : checkBtn(done, 'goalToggle', { id: g.id }, (done ? 'Снять отметку: ' : 'Выполнено: ') + g.title, true)}
         <div class="grow stack" style="gap:6px">
           <div class="row between" style="align-items:baseline;gap:8px">
-            <span style="font-weight:600" class="${done && !g.target ? 'done-text' : ''}">${esc(g.title)}</span>
+            <button type="button" class="plain-btn ${done && !g.target ? 'done-text' : ''}" style="font-weight:600" data-action="goalEdit" data-id="${g.id}" aria-label="Изменить: ${esc(g.title)}">${esc(g.title)}</button>
             ${g.target ? `<span class="small muted" style="white-space:nowrap">${g.current || 0} / ${g.target}</span>` : ''}
           </div>
           ${g.target ? `<div class="bar"><i style="width:${Math.round(goalProgress(g) * 100)}%"></i></div>` : ''}
@@ -61,7 +62,19 @@ export function render() {
         <button class="icon-btn" style="width:36px;height:36px;border:0;background:transparent" data-action="goalDelete" data-id="${g.id}" aria-label="Удалить: ${esc(g.title)}">${icon('trash', 16)}</button>
       </div>
     </div>`;
-  }).join('');
+  });
+
+  const edit = state.goals.find((g) => g.id === ui.goalEdit);
+  const editForm = edit ? `
+  <form class="card" data-submit="goalSave" aria-label="Изменить цель">
+    <div class="row between"><h2>${edit.horizon === 'day' || edit.horizon === 'week' ? 'Задача' : 'Цель'}</h2><button type="button" class="icon-btn" data-action="goalEditClose" aria-label="Закрыть">${icon('close', 18)}</button></div>
+    <label class="field"><span>Название</span><input class="input" name="title" value="${esc(edit.title)}" required autocomplete="off"></label>
+    <div class="grid2">
+      <label class="field"><span>Категория</span>${categorySelect('goal', edit.categoryId || '')}</label>
+      <label class="field"><span>Цель в числах (необязательно)</span><input class="input" name="target" inputmode="numeric" value="${edit.target || ''}" placeholder="без числа"></label>
+    </div>
+    <button class="btn">Сохранить</button>
+  </form>` : '';
 
   const parents = parentOptions(hz, day);
   const parentName = HORIZONS.find((h) => h.id === HORIZONS.find((x) => x.id === hz).parent)?.name.toLowerCase();
@@ -79,6 +92,7 @@ export function render() {
     <div class="row between small"><span class="muted">${tinfo.span}</span><span class="muted">${tinfo.note}</span></div>
     <div class="bar" style="height:4px" aria-hidden="true"><i style="width:${Math.round(tinfo.pct * 100)}%;background:var(--muted)"></i></div>
   </div>
+  ${editForm}
   <section class="card ink" aria-label="Итог периода">
     <div class="row between"><span class="label">${HORIZONS.find((h) => h.id === hz).name}: прогресс</span><span class="small muted">${doneN} из ${items.length} готово</span></div>
     <span class="huge">${Math.round(avg * 100)}%</span>
@@ -91,6 +105,7 @@ export function render() {
       <input id="goalTitle" name="title" placeholder="${ph}" autocomplete="off" required>
       <button class="icon-btn round ink" aria-label="Добавить" style="width:36px;height:36px">${icon('plus', 16)}</button>
     </div>
+    <label class="field"><span>Категория</span>${categorySelect('goal', ui.goalNewCat || '')}</label>
     <details ${ui.goalForm ? 'open' : ''} data-toggle="goalForm">
       <summary class="small muted" style="cursor:pointer">Число и связь с целью</summary>
       <div class="grid2" style="margin-top:10px">
@@ -99,7 +114,8 @@ export function render() {
           <select class="input" name="parentId" ${parents.length ? '' : 'disabled'}><option value="">без связи</option>${parents.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select></label>
       </div>
     </details>
-  </form>`;
+  </form>
+  ${categoryManager('goal', 'goalCats', ui)}`;
 }
 
 export const actions = {
@@ -121,14 +137,33 @@ export const actions = {
       for (const c of s.goals) if (c.parentId === g.id) c.parentId = null;
     });
   },
+  goalEdit(el) { ui.goalEdit = el.dataset.id; commit(() => {}); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+  goalEditClose() { ui.goalEdit = null; commit(() => {}); },
+  goalSave(form) {
+    const title = form.title.value.trim();
+    if (!title) return;
+    const target = parseNum(form.target.value);
+    const c = form.categoryId.value;
+    commit((s) => {
+      const g = s.goals.find((x) => x.id === ui.goalEdit);
+      if (!g) return;
+      g.title = title;
+      g.target = target && target > 0 ? Math.round(target) : null;
+      if (c && c !== '__new') g.categoryId = c; else delete g.categoryId;
+    });
+    ui.goalEdit = null; commit(() => {});
+  },
   goalAdd(form) {
     const title = form.title.value.trim();
     if (!title) return;
     const target = parseNum(form.target.value);
     const parentId = form.parentId.value || null;
+    const cat = form.categoryId.value && form.categoryId.value !== '__new' ? form.categoryId.value : null;
+    ui.goalNewCat = cat; // следующая цель — в ту же категорию
     commit((s) => s.goals.push({
       id: uid(), title, horizon: ui.goalsHorizon, period: periodKey(ui.goalsHorizon, ui.goalsDay),
-      target: target && target > 0 ? Math.round(target) : null, current: 0, done: false, parentId, created: Date.now()
+      target: target && target > 0 ? Math.round(target) : null, current: 0, done: false, parentId, created: Date.now(),
+      ...(cat ? { categoryId: cat } : {})
     }));
     requestAnimationFrame(() => document.getElementById('goalTitle')?.focus());
   }

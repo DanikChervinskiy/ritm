@@ -1,6 +1,7 @@
 import { state, commit, uid } from '../store.js';
 import { ui, header, habitIcon } from '../ui.js';
 import { today, addDays, weekStart, weekDays, esc, icon, fmtLongDate, plural, HABIT_ICONS, guessIcon } from '../util.js';
+import { renderGrouped, categorySelect, categoryManager } from '../categories.js';
 import { status, cycleStatus, streak, bestStreak, rate, overallRate } from '../logic.js';
 
 const WEEKS = 15;
@@ -34,7 +35,7 @@ export function render() {
 
   const chips = habits.map((h) => `<button class="chip row" style="gap:6px" data-action="pickHabit" data-id="${h.id}" aria-pressed="${h.id === ui.habitSel}">${icon(h.icon || 'habits', 15)}${esc(h.name)}</button>`).join('');
   const wd = weekDays(t);
-  const rows = habits.map((h) => {
+  const rows = renderGrouped(habits, 'habit', (h) => {
     const dots = wd.map((d) => { const st = status(h.id, d); return `<i class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : d > t ? 'future' : ''}"></i>`; }).join('');
     const s = streak(h.id);
     return `<div class="list-row">
@@ -45,7 +46,7 @@ export function render() {
       <span style="width:40px;text-align:right;font-weight:600;font-size:13px">${Math.round(rate(h.id) * 100)}%</span>
       <button class="icon-btn" style="width:36px;height:36px;border:0;background:transparent" data-action="editHabit" data-id="${h.id}" aria-label="Изменить: ${esc(h.name)}">${icon('next', 16)}</button>
     </div>`;
-  }).join('');
+  });
 
   const edit = state.habits.find((h) => h.id === ui.habitEdit);
   const editForm = edit ? `
@@ -54,6 +55,7 @@ export function render() {
       <label class="field"><span>Название</span><input class="input" name="name" value="${esc(edit.name)}" required></label>
       <div class="field"><span>Иконка</span>
         <div class="icon-grid" role="radiogroup" aria-label="Иконка">${HABIT_ICONS.map((ic) => `<button type="button" role="radio" aria-checked="${(ui.habitIcon || edit.icon || 'habits') === ic}" aria-pressed="${(ui.habitIcon || edit.icon || 'habits') === ic}" aria-label="Иконка: ${ICON_NAMES[ic] || ic}" data-action="pickIcon" data-ic="${ic}">${icon(ic, 20)}</button>`).join('')}</div></div>
+      <label class="field"><span>Категория</span>${categorySelect('habit', edit.categoryId || '')}</label>
       <label class="field"><span>Сколько раз в неделю</span>
         <select class="input" name="perWeek">${[7, 6, 5, 4, 3, 2, 1].map((n) => `<option value="${n}" ${n === edit.perWeek ? 'selected' : ''}>${n === 7 ? 'Каждый день' : n + ' ' + plural(n, 'раз', 'раза', 'раз')}</option>`).join('')}</select></label>
       <div class="row"><button class="btn grow">Сохранить</button><button type="button" class="btn danger" data-action="deleteHabit" data-id="${edit.id}">${icon('trash', 16)}Удалить</button></div>
@@ -78,13 +80,17 @@ export function render() {
     <section class="card" aria-label="Все привычки" style="gap:0">
       <div class="row between" style="padding-bottom:6px"><span class="label">Эта неделя</span><span class="mono small muted">П В С Ч П С В</span></div>
       ${rows || '<div class="empty">Добавь первую привычку ниже</div>'}
-      <form class="addbar" data-submit="addHabit" style="background:var(--card-2);margin-top:8px">
-        <label class="sr-only" for="newHabit">Новая привычка</label>
-        <input id="newHabit" name="name" placeholder="Новая привычка…" autocomplete="off">
-        <button class="icon-btn round ink" aria-label="Добавить привычку" style="width:36px;height:36px">${icon('plus', 16)}</button>
+      <form class="stack" data-submit="addHabit" style="gap:8px;margin-top:8px">
+        <div class="addbar" style="background:var(--card-2)">
+          <label class="sr-only" for="newHabit">Новая привычка</label>
+          <input id="newHabit" name="name" placeholder="Новая привычка…" autocomplete="off">
+          <button class="icon-btn round ink" aria-label="Добавить привычку" style="width:36px;height:36px">${icon('plus', 16)}</button>
+        </div>
+        <label class="field"><span>Категория новой привычки</span>${categorySelect('habit', ui.habitNewCat || '', { name: 'categoryId', id: 'newHabitCat' })}</label>
       </form>
     </section>
-  </div>`;
+  </div>
+  ${categoryManager('habit', 'habitCats', ui)}`;
 }
 
 export const actions = {
@@ -99,7 +105,9 @@ export const actions = {
     const name = form.name.value.trim();
     if (!name) return;
     const id = uid();
-    commit((s) => s.habits.push({ id, name, icon: guessIcon(name), perWeek: 7, created: today() }));
+    const cat = form.categoryId.value && form.categoryId.value !== '__new' ? form.categoryId.value : null;
+    ui.habitNewCat = cat; // следующая привычка — в ту же категорию
+    commit((s) => s.habits.push({ id, name, icon: guessIcon(name), perWeek: 7, created: today(), ...(cat ? { categoryId: cat } : {}) }));
     ui.habitSel = id;
     requestAnimationFrame(() => document.getElementById('newHabit')?.focus());
   },
@@ -108,7 +116,7 @@ export const actions = {
   saveHabit(form) {
     const name = form.name.value.trim();
     if (!name) return;
-    commit((s) => { const h = s.habits.find((x) => x.id === ui.habitEdit); if (h) { h.name = name; h.perWeek = Number(form.perWeek.value); if (ui.habitIcon) h.icon = ui.habitIcon; } });
+    commit((s) => { const h = s.habits.find((x) => x.id === ui.habitEdit); if (h) { h.name = name; h.perWeek = Number(form.perWeek.value); if (ui.habitIcon) h.icon = ui.habitIcon; const c = form.categoryId.value; if (c && c !== '__new') h.categoryId = c; else delete h.categoryId; } });
     ui.habitEdit = null; commit(() => {});
   },
   deleteHabit(el) {

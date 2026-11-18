@@ -22,7 +22,8 @@ function defaults() {
     ],
     checks: {},          // { 'YYYY-MM-DD': [habitId, ...] } — выполнено
     partial: {},         // { 'YYYY-MM-DD': [habitId, ...] } — выполнено частично
-    goals: [],           // { id, title, horizon, period, target, current, done, parentId, created }
+    goals: [],           // { id, title, horizon, period, target, current, done, parentId, created, categoryId? }
+    categories: [],      // { id, name, kind: 'habit' | 'goal' } — с v0.4.0; у привычек и целей поле categoryId
     exercises: [],       // { id, name, rest }
     workouts: [],        // { id, name, date, startedAt, finishedAt, items: [{ exerciseId, sets: [{ w, r, done }] }] }
     activeWorkoutId: null,
@@ -41,7 +42,7 @@ function migrate(data) {
   const out = { ...base, ...data };
   out.settings = { ...base.settings, ...(data.settings || {}) };
   out.profile = { ...base.profile, ...(data.profile || {}) };
-  for (const k of ['habits', 'goals', 'exercises', 'workouts', 'body']) if (!Array.isArray(out[k])) out[k] = [];
+  for (const k of ['habits', 'goals', 'exercises', 'workouts', 'body', 'categories']) if (!Array.isArray(out[k])) out[k] = [];
   if (!out.checks || typeof out.checks !== 'object') out.checks = {};
   if (!out.partial || typeof out.partial !== 'object') out.partial = {}; // с v0.2.0: частично выполненные привычки
   out.schema = SCHEMA;

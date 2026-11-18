@@ -212,6 +212,15 @@ html, body { overscroll-behavior-y: contain; }
 /* текст может переноситься — строка растёт, кнопка справа не сжимается */
 .list-row > .btn, .list-row > .icon-btn, .list-row > .chip { flex: none; white-space: nowrap; }
 .list-row:first-child { border-top: 0; }
+/* Категории (с v0.4.0): заголовок группы и тонкий разделитель между группами */
+.cat-group { display: flex; flex-direction: column; }
+.cat-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 4px 0 2px; }
+.cat-head + .list-row { border-top: 0; }
+.stack > .cat-group { gap: 10px; }
+.stack > .cat-group > .cat-head { padding: 2px 4px 0; }
+hr.cat-div { border: 0; height: 1px; background: var(--muted); opacity: .35; margin: 8px 0; width: 100%; flex: none; }
+.plain-btn { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.icon-btn:disabled { opacity: .3; cursor: default; }
 
 /* inputs — на телефоне не меньше 16px, иначе iOS увеличивает экран при вводе */
 @media (max-width: 999px) {
