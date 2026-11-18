@@ -36,13 +36,35 @@ export function habitStart(h) {
   return start;
 }
 
+// Дни недели привычки (с v0.9.0): h.days = [1…7], 1 — понедельник. Пусто — любой день.
+export const WD_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+export const weekdayOf = (day) => { const g = new Date(day + 'T12:00:00').getDay(); return g === 0 ? 7 : g; };
+export const hasDays = (h) => Array.isArray(h?.days) && h.days.length > 0 && h.days.length < 7;
+// Нужна ли привычка в этот день (по расписанию).
+export const isDue = (h, day) => !hasDays(h) || h.days.includes(weekdayOf(day));
+// Показывать ли привычку в этот день: по расписанию или уже отмечена.
+export const showsOn = (h, day) => isDue(h, day) || isMarked(h.id, day);
+export const daysLabel = (h) => hasDays(h) ? [...h.days].sort().map((d) => WD_NAMES[d - 1]).join(', ') : '';
+
 export function dayProgress(day) {
-  const hs = state.habits.filter((h) => !h.archived && habitStart(h) <= day);
+  const hs = state.habits.filter((h) => !h.archived && habitStart(h) <= day && showsOn(h, day));
   let done = 0, partial = 0;
   for (const h of hs) { const st = status(h.id, day); if (st === 'done') done++; else if (st === 'partial') partial++; }
   return { done, partial, total: hs.length, score: hs.length ? (done + partial / 2) / hs.length : 0 };
 }
 export function streak(habitId) {
+  const h = state.habits.find((x) => x.id === habitId);
+  if (hasDays(h)) {
+    // Серия по дням расписания: дни вне расписания пропускаются.
+    let d = today(), n = 0, guard = 0;
+    if (!isDue(h, d) || !isMarked(habitId, d)) d = addDays(d, -1); // сегодня ещё можно успеть
+    for (; guard < 3660; guard++, d = addDays(d, -1)) {
+      if (!isDue(h, d)) continue;
+      if (!isMarked(habitId, d)) break;
+      n++;
+    }
+    return n;
+  }
   let d = today();
   if (!isMarked(habitId, d)) d = addDays(d, -1); // сегодня ещё можно успеть
   let n = 0;
@@ -57,6 +79,19 @@ function markedDays(habitId, from = '0000', to = '9999') {
   return [...new Set(out)].sort();
 }
 export function bestStreak(habitId, from, to) {
+  const h = state.habits.find((x) => x.id === habitId);
+  if (hasDays(h)) {
+    const marked = markedDays(habitId, from, to);
+    if (!marked.length) return 0;
+    let best = 0, cur = 0;
+    const end = marked[marked.length - 1];
+    for (let d = marked[0]; d <= end; d = addDays(d, 1)) {
+      if (!isDue(h, d)) continue;
+      cur = isMarked(habitId, d) ? cur + 1 : 0;
+      best = Math.max(best, cur);
+    }
+    return best;
+  }
   let best = 0, cur = 0, prev = null;
   for (const d of markedDays(habitId, from, to)) {
     cur = prev && addDays(prev, 1) === d ? cur + 1 : 1;
@@ -73,8 +108,9 @@ export function rangeStats(habitId, from, to) {
   const start = habitStart(h);
   const end = to < today() ? to : today();
   for (let d = from < start ? start : from; d <= end; d = addDays(d, 1)) {
-    res.days++;
     const st = status(habitId, d);
+    if (!isDue(h, d) && !st) continue; // день не по расписанию — не считается
+    res.days++;
     if (st === 'done') res.done++; else if (st === 'partial') res.partial++;
   }
   res.rate = res.days ? (res.done + res.partial / 2) / res.days : null;

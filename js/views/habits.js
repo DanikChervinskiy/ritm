@@ -2,7 +2,7 @@ import { state, commit, uid } from '../store.js';
 import { ui, header, habitIcon } from '../ui.js';
 import { today, addDays, weekStart, weekDays, esc, icon, fmtLongDate, plural, HABIT_ICONS, guessIcon } from '../util.js';
 import { renderGrouped, categorySelect, categoryManager } from '../categories.js';
-import { status, cycleStatus, streak, bestStreak, rate, overallRate } from '../logic.js';
+import { status, cycleStatus, streak, bestStreak, rate, overallRate, isDue, hasDays, daysLabel, WD_NAMES } from '../logic.js';
 
 const WEEKS = 15;
 const ICON_NAMES = { habits: 'галочка', book: 'книга', water: 'вода', gym: 'зал', run: 'бег', walk: 'ходьба', bike: 'велосипед', phoneoff: 'без телефона', phone: 'звонок', sun: 'утро', moon: 'вечер', bed: 'сон', cross: 'вера', globe: 'язык', leaf: 'спокойствие', apple: 'питание', pill: 'витамины', music: 'музыка', code: 'код', money: 'деньги', heart: 'здоровье', pen: 'запись', broom: 'уборка', flame: 'огонь', star: 'звезда', clock: 'время' };
@@ -26,9 +26,10 @@ export function render() {
       const d = addDays(start, i);
       const future = d > t;
       const st = future ? null : status(sel.id, d);
+      const off = !isDue(sel, d) ? ' off' : '';
       cells.push(future
         ? `<button class="future" disabled aria-hidden="true" tabindex="-1"></button>`
-        : `<button class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : ''}${d === t ? ' today' : ''}" data-action="heatToggle" data-day="${d}" aria-pressed="${st === 'done' ? 'true' : st === 'partial' ? 'mixed' : 'false'}" aria-label="${fmtLongDate(d)}${st === 'done' ? ', выполнено' : st === 'partial' ? ', частично' : ''}"></button>`);
+        : `<button class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : ''}${off}${d === t ? ' today' : ''}" data-action="heatToggle" data-day="${d}" aria-pressed="${st === 'done' ? 'true' : st === 'partial' ? 'mixed' : 'false'}" aria-label="${fmtLongDate(d)}${st === 'done' ? ', выполнено' : st === 'partial' ? ', частично' : ''}"></button>`);
     }
     heat = `<div class="heat" style="grid-template-columns:repeat(${WEEKS},minmax(0,1fr))">${cells.join('')}</div>`;
   }
@@ -36,12 +37,12 @@ export function render() {
   const chips = habits.map((h) => `<button class="chip row" style="gap:6px" data-action="pickHabit" data-id="${h.id}" aria-pressed="${h.id === ui.habitSel}">${icon(h.icon || 'habits', 15)}${esc(h.name)}</button>`).join('');
   const wd = weekDays(t);
   const rows = renderGrouped(habits, 'habit', (h) => {
-    const dots = wd.map((d) => { const st = status(h.id, d); return `<i class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : d > t ? 'future' : ''}"></i>`; }).join('');
+    const dots = wd.map((d) => { const st = status(h.id, d); return `<i class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : !isDue(h, d) ? 'off' : d > t ? 'future' : ''}"></i>`; }).join('');
     const s = streak(h.id);
     return `<div class="list-row">
       ${habitIcon(h, 32)}
       <div class="grow stack" style="gap:1px;min-width:0"><span class="ellipsis" style="font-weight:600">${esc(h.name)}</span>
-        <span class="small muted">${s ? `серия ${s} ${plural(s, 'день', 'дня', 'дней')}` : 'нет серии'} · ${h.perWeek < 7 ? h.perWeek + '× в неделю' : 'каждый день'}</span></div>
+        <span class="small muted">${s ? `серия ${s} ${plural(s, 'день', 'дня', 'дней')}` : 'нет серии'} · ${hasDays(h) ? daysLabel(h) : h.perWeek < 7 ? h.perWeek + '× в неделю' : 'каждый день'}</span></div>
       <div class="dots" aria-label="Эта неделя">${dots}</div>
       <span style="width:40px;text-align:right;font-weight:600;font-size:13px">${Math.round(rate(h.id) * 100)}%</span>
       <button class="icon-btn" style="width:36px;height:36px;border:0;background:transparent" data-action="editHabit" data-id="${h.id}" aria-label="Изменить: ${esc(h.name)}">${icon('next', 16)}</button>
@@ -49,6 +50,8 @@ export function render() {
   });
 
   const edit = state.habits.find((h) => h.id === ui.habitEdit);
+  if (edit && !ui.habitDays) ui.habitDays = [...(edit.days || [])];
+  const editDays = ui.habitDays || [];
   const editForm = edit ? `
     <form class="card" data-submit="saveHabit" aria-label="Изменить привычку">
       <div class="row between"><h2>Привычка</h2><button type="button" class="icon-btn" data-action="closeEdit" aria-label="Закрыть">${icon('close', 18)}</button></div>
@@ -56,7 +59,10 @@ export function render() {
       <div class="field"><span>Иконка</span>
         <div class="icon-grid" role="radiogroup" aria-label="Иконка">${HABIT_ICONS.map((ic) => `<button type="button" role="radio" aria-checked="${(ui.habitIcon || edit.icon || 'habits') === ic}" aria-pressed="${(ui.habitIcon || edit.icon || 'habits') === ic}" aria-label="Иконка: ${ICON_NAMES[ic] || ic}" data-action="pickIcon" data-ic="${ic}">${icon(ic, 20)}</button>`).join('')}</div></div>
       <label class="field"><span>Категория</span>${categorySelect('habit', edit.categoryId || '')}</label>
-      <label class="field"><span>Сколько раз в неделю</span>
+      <div class="field"><span>Дни недели</span>
+        <div class="row" style="gap:6px;flex-wrap:wrap" role="group" aria-label="Дни недели">${WD_NAMES.map((n, i) => `<button type="button" class="chip" data-action="pickDay" data-d="${i + 1}" aria-pressed="${editDays.includes(i + 1)}">${n}</button>`).join('')}</div>
+        <span class="small muted">${editDays.length && editDays.length < 7 ? 'Привычка только в эти дни: в остальные её нет на «Сегодня» и в статистике.' : 'Не выбрано — привычка на каждый день.'}</span></div>
+      <label class="field" ${editDays.length && editDays.length < 7 ? 'hidden' : ''}><span>Сколько раз в неделю</span>
         <select class="input" name="perWeek">${[7, 6, 5, 4, 3, 2, 1].map((n) => `<option value="${n}" ${n === edit.perWeek ? 'selected' : ''}>${n === 7 ? 'Каждый день' : n + ' ' + plural(n, 'раз', 'раза', 'раз')}</option>`).join('')}</select></label>
       <div class="row"><button class="btn grow">Сохранить</button><button type="button" class="btn danger" data-action="deleteHabit" data-id="${edit.id}">${icon('trash', 16)}Удалить</button></div>
     </form>` : '';
@@ -100,6 +106,12 @@ export const actions = {
     ui.habitIcon = el.dataset.ic;
     el.parentElement.querySelectorAll('button').forEach((b) => { const on = b === el; b.setAttribute('aria-pressed', on); b.setAttribute('aria-checked', on); });
   },
+  pickDay(el) {
+    const d = Number(el.dataset.d);
+    const cur = ui.habitDays || [];
+    ui.habitDays = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort();
+    commit(() => {});
+  },
   focusNewHabit() { document.getElementById('newHabit')?.focus(); },
   addHabit(form) {
     const name = form.name.value.trim();
@@ -111,13 +123,13 @@ export const actions = {
     ui.habitSel = id;
     requestAnimationFrame(() => document.getElementById('newHabit')?.focus());
   },
-  editHabit(el) { ui.habitEdit = el.dataset.id; ui.habitIcon = null; commit(() => {}); window.scrollTo({ top: 0, behavior: 'smooth' }); },
-  closeEdit() { ui.habitEdit = null; commit(() => {}); },
+  editHabit(el) { ui.habitEdit = el.dataset.id; ui.habitIcon = null; ui.habitDays = null; commit(() => {}); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+  closeEdit() { ui.habitEdit = null; ui.habitDays = null; commit(() => {}); },
   saveHabit(form) {
     const name = form.name.value.trim();
     if (!name) return;
-    commit((s) => { const h = s.habits.find((x) => x.id === ui.habitEdit); if (h) { h.name = name; h.perWeek = Number(form.perWeek.value); if (ui.habitIcon) h.icon = ui.habitIcon; const c = form.categoryId.value; if (c && c !== '__new') h.categoryId = c; else delete h.categoryId; } });
-    ui.habitEdit = null; commit(() => {});
+    commit((s) => { const h = s.habits.find((x) => x.id === ui.habitEdit); if (h) { h.name = name; const days = ui.habitDays || []; if (days.length && days.length < 7) { h.days = [...days]; h.perWeek = days.length; } else { delete h.days; h.perWeek = Number(form.perWeek.value); } if (ui.habitIcon) h.icon = ui.habitIcon; const c = form.categoryId.value; if (c && c !== '__new') h.categoryId = c; else delete h.categoryId; } });
+    ui.habitEdit = null; ui.habitDays = null; commit(() => {});
   },
   deleteHabit(el) {
     const h = state.habits.find((x) => x.id === el.dataset.id);

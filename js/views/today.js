@@ -2,7 +2,7 @@ import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn, habitBtn, habitIcon } from '../ui.js';
 import { today, weekDays, parseDate, WD_SHORT, fmtLongDate, esc, icon, ring, plural, num } from '../util.js';
 import { renderGrouped } from '../categories.js';
-import { status, dayProgress, streak, weekCount, goalsFor, isGoalDone, activeWorkout, lastFinishedWorkout, nextTemplate, exerciseName } from '../logic.js';
+import { status, showsOn, daysLabel, hasDays, dayProgress, streak, weekCount, goalsFor, isGoalDone, activeWorkout, lastFinishedWorkout, nextTemplate, exerciseName } from '../logic.js';
 
 export function render() {
   const sel = ui.selDay;
@@ -18,13 +18,13 @@ export function render() {
       <span class="mono small muted">${WD_SHORT[i]}</span><span class="n">${parseDate(d).getDate()}</span><span class="dot"></span></button>`;
   }).join('');
 
-  const habits = state.habits.filter((h) => !h.archived);
+  const habits = state.habits.filter((h) => !h.archived && showsOn(h, sel));
   const p = dayProgress(sel);
   const habitRows = habits.length
     ? renderGrouped(habits, 'habit', (h) => {
       const st = status(h.id, sel);
       const s = streak(h.id);
-      const meta = h.perWeek < 7 ? `${num(weekCount(h.id, sel), weekCount(h.id, sel) % 1 ? 1 : 0)} из ${h.perWeek} за неделю` : s ? `серия ${s} ${plural(s, 'день', 'дня', 'дней')}` : 'начни серию сегодня';
+      const meta = hasDays(h) ? `${daysLabel(h)} · ${num(weekCount(h.id, sel), weekCount(h.id, sel) % 1 ? 1 : 0)} из ${h.days.length} за неделю` : h.perWeek < 7 ? `${num(weekCount(h.id, sel), weekCount(h.id, sel) % 1 ? 1 : 0)} из ${h.perWeek} за неделю` : s ? `серия ${s} ${plural(s, 'день', 'дня', 'дней')}` : 'начни серию сегодня';
       return `<div class="list-row">
         ${habitIcon(h, 36)}
         <div class="grow stack" style="gap:1px"><span style="font-weight:600" class="${st === 'done' ? 'done-text' : ''}">${esc(h.name)}</span>
@@ -32,7 +32,7 @@ export function render() {
         ${habitBtn(h, sel, st)}
       </div>`;
     })
-    : `<div class="empty">Привычек пока нет. <a href="#/habits">Добавить</a></div>`;
+    : state.habits.some((h) => !h.archived) ? `<div class="empty">На этот день привычек нет</div>` : `<div class="empty">Привычек пока нет. <a href="#/habits">Добавить</a></div>`;
 
   const tasks = goalsFor('day', sel);
   const taskRows = renderGrouped(tasks, 'goal', (g) => {

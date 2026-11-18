@@ -46,8 +46,39 @@ function migrate(data) {
   for (const k of ['habits', 'goals', 'exercises', 'workouts', 'body', 'categories', 'templates']) if (!Array.isArray(out[k])) out[k] = [];
   if (!out.checks || typeof out.checks !== 'object') out.checks = {};
   if (!out.partial || typeof out.partial !== 'object') out.partial = {}; // с v0.2.0: частично выполненные привычки
+  applyFixes(out);
   out.schema = SCHEMA;
   return out;
+}
+
+function gymHabit(d) {
+  const hs = d.habits.filter((h) => !h.archived);
+  return hs.find((h) => h.icon === 'gym') || hs.find((h) => /зал|трен|спорт|качал/i.test(h.name || ''));
+}
+
+// Разовые правки данных; каждая выполняется один раз (метка в fixes, документ core).
+function applyFixes(d) {
+  d.fixes = Array.isArray(d.fixes) ? d.fixes : [];
+  // v0.9.0: тренировка — 3 раза в неделю, Пн / Ср / Пт (сказал пользователь 2026-11-18).
+  if (!d.fixes.includes('gym-days')) {
+    const gym = gymHabit(d);
+    if (gym && !gym.days) { gym.days = [1, 3, 5]; gym.perWeek = 3; }
+    d.fixes.push('gym-days');
+  }
+}
+
+// Очистить всё по залу: тренировки, программы, упражнения, отметки привычек про зал.
+export function clearGym() {
+  backupNow('до очистки зала ' + today());
+  const gymIds = new Set(state.templates.map((t) => t.habitId).filter(Boolean));
+  const g = gymHabit(state); if (g) gymIds.add(g.id);
+  commit((s) => {
+    s.workouts = []; s.templates = []; s.exercises = []; s.activeWorkoutId = null; s.rest = null;
+    for (const key of ['checks', 'partial']) for (const d of Object.keys(s[key] || {})) {
+      s[key][d] = s[key][d].filter((id) => !gymIds.has(id));
+      if (!s[key][d].length) delete s[key][d];
+    }
+  });
 }
 
 function load() {

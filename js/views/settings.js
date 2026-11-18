@@ -1,4 +1,4 @@
-import { state, commit, exportJSON, replaceAll, resetAll, listBackups, restoreBackup, backupNow } from '../store.js';
+import { state, commit, exportJSON, replaceAll, resetAll, clearGym, listBackups, restoreBackup, backupNow } from '../store.js';
 import { isWorkoutsFile, previewWorkouts, mergeWorkouts } from '../importWorkouts.js';
 import { ui, header } from '../ui.js';
 import { VERSION } from '../version.js';
@@ -116,6 +116,7 @@ export function render() {
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Добавить тренировки из файла</span><span class="small muted">история и программы дописываются к текущим данным, ничего не стирается</span></div>
       <label class="btn light sm" style="cursor:pointer">${icon('upload', 16)}Файл<input type="file" accept="application/json,.json" class="sr-only" data-change="importWorkouts"></label></div>
     ${backups.map((b) => `<div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">${/^\d+\.\d+\.\d+$/.test(b) ? 'Копия перед обновлением' : 'Копия на устройстве'}</span><span class="small muted">${/^\d+\.\d+\.\d+$/.test(b) ? 'данные из версии ' + esc(b) : esc(b)}</span></div><button class="btn light sm" data-action="restoreBackup" data-v="${esc(b)}">Вернуть</button></div>`).join('')}
+    <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Очистить зал</span><span class="small muted">удалить все тренировки, программы, упражнения и отметки привычки «тренировка»; остальное останется</span></div><button class="btn danger sm" data-action="clearGym">Очистить</button></div>
     <div class="list-row"><div class="grow stack" style="gap:1px"><span style="font-weight:500">Сбросить всё</span><span class="small muted">удалить данные на этом устройстве</span></div><button class="btn danger sm" data-action="resetData">Сбросить</button></div>
   </section>
 
@@ -201,6 +202,10 @@ export const actions = {
   restoreBackup(el) {
     if (!confirm(`Вернуть данные из копии версии ${el.dataset.v}? Текущие данные будут заменены.`)) return;
     if (restoreBackup(el.dataset.v)) { applyTheme(); toast('Данные восстановлены'); }
+  },
+  clearGym() {
+    if (!confirm('Удалить все тренировки, программы и упражнения, а также отметки привычки про зал? Привычки, цели и вес останутся. Копия сохранится на устройстве.')) return;
+    clearGym(); toast('Зал очищен — можно начинать с нуля');
   },
   resetData() {
     const msg = sync.user
