@@ -16,8 +16,8 @@
 Каждое изменение выходит отдельной версией `vX.Y.Z`:
 
 1. Изменения описываются в `CHANGELOG.md` в разделе «Не выпущено».
-2. `scripts/release.sh X.Y.Z "что изменилось"` — обновляет номер версии, CHANGELOG, делает коммит и git-тег.
-3. `git push origin main --follow-tags` — GitHub сам создаёт Release и публикует сайт.
+2. `scripts/release.sh X.Y.Z "что изменилось"` — обновляет номер версии и CHANGELOG, делает коммит.
+3. `git push origin main` — GitHub Actions сам создаёт тег `vX.Y.Z`, Release с описанием и публикует сайт.
 
 Как откатиться:
 

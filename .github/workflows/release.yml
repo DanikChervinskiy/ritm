@@ -1,30 +1,80 @@
-# При пуше тега vX.Y.Z создаёт GitHub Release с описанием из CHANGELOG.md
-# и архивом этой версии — её всегда можно скачать или откатиться к ней.
-name: Release
+# При каждом обновлении main:
+# 1) если номер версии в js/version.js новый — создаёт тег vX.Y.Z и GitHub Release
+#    с описанием из CHANGELOG.md (к любой версии можно вернуться);
+# 2) публикует сайт на GitHub Pages: в корне — последняя версия,
+#    в /v/vX.Y.Z/ — каждая выпущенная версия.
+name: Release & Deploy
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-deploy
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Описание из CHANGELOG
+      - name: Создать версию, если она новая
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          V=$(grep -oE "VERSION = '[0-9]+\.[0-9]+\.[0-9]+'" js/version.js | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          echo "Версия в коде: $V"
+          if gh release view "v$V" >/dev/null 2>&1; then
+            echo "v$V уже выпущена — пропускаю"
+            exit 0
+          fi
           awk -v v="$V" '
-            $0 ~ "^## \\[" v "\\]" {on=1; next}
+            index($0, "## [" v "]") == 1 {on=1; next}
             on && /^## \[/ {exit}
             on {print}
           ' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "Версия $V" > notes.md
-          cat notes.md
-      - name: Создать релиз
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md
+
+  build:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Собрать сайт со всеми версиями
+        run: |
+          set -e
+          git fetch --tags --force
+          mkdir -p _site/v
+          git archive HEAD | tar -x -C _site
+          rm -rf _site/.github _site/scripts
+          tags=$(git tag -l 'v*' --sort=version:refname)
+          for t in $tags; do
+            mkdir -p "_site/v/$t"
+            git archive "$t" | tar -x -C "_site/v/$t"
+            rm -rf "_site/v/$t/.github" "_site/v/$t/scripts"
+          done
+          printf '%s\n' $tags | jq -R . | jq -s 'map(select(length>0))' > _site/versions.json
+          touch _site/.nojekyll
+          cat _site/versions.json
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

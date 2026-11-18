@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Выпуск новой версии.
 #   scripts/release.sh 0.2.0 "Короткое описание изменений"
-# Делает: обновляет номер версии в коде, дописывает CHANGELOG.md,
-# создаёт коммит и git-тег vX.Y.Z. Пуш: git push origin main --tags
+# Обновляет номер версии в коде, превращает раздел «Не выпущено» в CHANGELOG.md
+# в раздел новой версии и делает коммит. Потом: git push origin main —
+# GitHub сам создаст тег vX.Y.Z, Release и опубликует сайт.
 set -euo pipefail
 
 NEW="${1:-}"
@@ -13,15 +14,14 @@ if [[ ! "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 cd "$(dirname "$0")/.."
 
-if git rev-parse "v$NEW" >/dev/null 2>&1; then
-  echo "Тег v$NEW уже существует" >&2
+if grep -q "^## \[$NEW\]" CHANGELOG.md; then
+  echo "Версия $NEW уже есть в CHANGELOG.md" >&2
   exit 1
 fi
 
 sed -i.bak -E "s/VERSION = '[0-9]+\.[0-9]+\.[0-9]+'/VERSION = '$NEW'/" js/version.js sw.js
 rm -f js/version.js.bak sw.js.bak
 
-# Раздел «Не выпущено» в CHANGELOG превращается в раздел новой версии.
 DATE="$(date +%Y-%m-%d)"
 if grep -q '^## \[Не выпущено\]' CHANGELOG.md; then
   sed -i.bak "s/^## \[Не выпущено\]/## [Не выпущено]\n\n## [$NEW] — $DATE/" CHANGELOG.md
@@ -32,5 +32,4 @@ fi
 
 git add -A
 git commit -m "release: v$NEW${NOTE:+ — $NOTE}"
-git tag -a "v$NEW" -m "v$NEW${NOTE:+ — $NOTE}"
-echo "Готово: v$NEW. Отправить: git push origin main --follow-tags"
+echo "Готово: v$NEW. Отправить: git push origin main"
