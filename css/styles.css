@@ -208,7 +208,9 @@ html, body { overscroll-behavior-y: contain; }
 .mbars i { display: block; width: 100%; border-radius: 6px 6px 3px 3px; background: var(--ink); min-height: 3px; }
 .mbars button.cur i { background: var(--accent); }
 
-.list-row { display: flex; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid var(--line); }
+.list-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 0; border-top: 1px solid var(--line); }
+/* текст может переноситься — строка растёт, кнопка справа не сжимается */
+.list-row > .btn, .list-row > .icon-btn, .list-row > .chip { flex: none; white-space: nowrap; }
 .list-row:first-child { border-top: 0; }
 
 /* inputs — на телефоне не меньше 16px, иначе iOS увеличивает экран при вводе */

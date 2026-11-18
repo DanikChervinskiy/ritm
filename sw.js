@@ -1,5 +1,5 @@
 // Офлайн-кэш. VERSION обновляется scripts/release.sh — тогда телефон скачивает новую версию.
-const VERSION = '0.3.1';
+const VERSION = '0.3.2';
 const CACHE = 'ritm-' + VERSION;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css',
