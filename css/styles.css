@@ -36,7 +36,9 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--text); }
+html, body { margin: 0; background: var(--bg); color: var(--text); max-width: 100%; overflow-x: hidden; overflow-x: clip; }
+/* Без масштабирования: убираем зум по двойному тапу и автозум полей в iOS */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
   font-size: 15px;
@@ -64,17 +66,18 @@ a { color: inherit; }
 .main.with-rest { padding-bottom: calc(220px + var(--safe-b)); }
 
 .sidebar {
-  position: fixed; top: 0; left: 0; bottom: 0; z-index: 40;
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40;
   width: 300px; max-width: 86vw;
   background: var(--card);
-  border-radius: 0 32px 32px 0;
+  border-radius: 32px 0 0 32px;
   padding: calc(24px + var(--safe-t)) 16px calc(20px + var(--safe-b));
   display: flex; flex-direction: column; gap: 18px;
-  transform: translateX(-105%);
-  transition: transform .25s ease;
+  transform: translateX(105%);
+  visibility: hidden;
+  transition: transform .25s ease, visibility 0s linear .25s;
   overflow-y: auto;
 }
-.sidebar.open { transform: none; box-shadow: var(--shadow); }
+.sidebar.open { transform: none; visibility: visible; transition: transform .25s ease; box-shadow: var(--shadow); }
 .drawer-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(17, 17, 17, .45); }
 
 .tabbar {
@@ -97,7 +100,7 @@ a { color: inherit; }
 
 @media (min-width: 1000px) {
   .sidebar {
-    transform: none; position: sticky; float: left; top: 24px; height: calc(100dvh - 48px);
+    transform: none; visibility: visible; transition: none; position: sticky; right: auto; float: left; top: 24px; height: calc(100dvh - 48px);
     margin: 24px 0 24px 24px; border-radius: 28px; width: 250px;
   }
   .sidebar .close-drawer, .burger { display: none !important; }
@@ -208,6 +211,10 @@ html, body { overscroll-behavior-y: contain; }
 .list-row { display: flex; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid var(--line); }
 .list-row:first-child { border-top: 0; }
 
+/* inputs — на телефоне не меньше 16px, иначе iOS увеличивает экран при вводе */
+@media (max-width: 999px) {
+  input, select, textarea, .input, select.input, .addbar input { font-size: 16px !important; }
+}
 /* inputs */
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > span { font-size: 12px; color: var(--muted); }

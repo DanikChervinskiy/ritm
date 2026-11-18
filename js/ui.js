@@ -19,13 +19,13 @@ export function setRenderer(fn) { renderFn = fn; }
 export function rerender() { renderFn(); }
 
 export function header(title, label, right = '', { back = null } = {}) {
-  const left = back
-    ? `<a class="icon-btn" href="${back}" aria-label="Назад">${icon('back')}</a>`
-    : `<button class="icon-btn burger" data-action="openMenu" aria-label="Открыть меню">${icon('menu')}</button>`;
+  // Назад — слева, бургер-меню — справа (меню выезжает справа).
+  const left = back ? `<a class="icon-btn" href="${back}" aria-label="Назад">${icon('back')}</a>` : '';
+  const burger = back ? '' : `<button class="icon-btn burger" data-action="openMenu" aria-label="Открыть меню">${icon('menu')}</button>`;
   return `<header class="header">
     ${left}
     <div class="titles">${label ? `<span class="label">${esc(label)}</span>` : ''}<h1>${esc(title)}</h1></div>
-    ${right}
+    ${right}${burger}
   </header>`;
 }
 

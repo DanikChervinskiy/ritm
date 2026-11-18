@@ -232,3 +232,6 @@ navigator.storage?.persist?.().catch(() => {});
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+// Запрет масштабирования щипком в Safari на iPhone (user-scalable=no он игнорирует).
+['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
