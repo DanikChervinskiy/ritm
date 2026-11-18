@@ -1,9 +1,10 @@
 import { state, commit, uid } from '../store.js';
-import { ui, header } from '../ui.js';
-import { today, addDays, weekStart, weekDays, esc, icon, fmtLongDate, plural } from '../util.js';
-import { isChecked, toggleCheck, streak, bestStreak, rate, overallRate } from '../logic.js';
+import { ui, header, habitIcon } from '../ui.js';
+import { today, addDays, weekStart, weekDays, esc, icon, fmtLongDate, plural, HABIT_ICONS, guessIcon } from '../util.js';
+import { status, cycleStatus, streak, bestStreak, rate, overallRate } from '../logic.js';
 
 const WEEKS = 15;
+const ICON_NAMES = { habits: 'галочка', book: 'книга', water: 'вода', gym: 'зал', run: 'бег', walk: 'ходьба', bike: 'велосипед', phoneoff: 'без телефона', phone: 'звонок', sun: 'утро', moon: 'вечер', bed: 'сон', cross: 'вера', globe: 'язык', leaf: 'спокойствие', apple: 'питание', pill: 'витамины', music: 'музыка', code: 'код', money: 'деньги', heart: 'здоровье', pen: 'запись', broom: 'уборка', flame: 'огонь', star: 'звезда', clock: 'время' };
 
 export function render() {
   const habits = state.habits.filter((h) => !h.archived);
@@ -23,21 +24,22 @@ export function render() {
     for (let i = 0; i < WEEKS * 7; i++) {
       const d = addDays(start, i);
       const future = d > t;
-      const on = !future && isChecked(sel.id, d);
+      const st = future ? null : status(sel.id, d);
       cells.push(future
         ? `<button class="future" disabled aria-hidden="true" tabindex="-1"></button>`
-        : `<button class="${on ? 'on' : ''}${d === t ? ' today' : ''}" data-action="heatToggle" data-day="${d}" aria-pressed="${on}" aria-label="${fmtLongDate(d)}${on ? ', выполнено' : ''}"></button>`);
+        : `<button class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : ''}${d === t ? ' today' : ''}" data-action="heatToggle" data-day="${d}" aria-pressed="${st === 'done' ? 'true' : st === 'partial' ? 'mixed' : 'false'}" aria-label="${fmtLongDate(d)}${st === 'done' ? ', выполнено' : st === 'partial' ? ', частично' : ''}"></button>`);
     }
     heat = `<div class="heat" style="grid-template-columns:repeat(${WEEKS},minmax(0,1fr))">${cells.join('')}</div>`;
   }
 
-  const chips = habits.map((h) => `<button class="chip" data-action="pickHabit" data-id="${h.id}" aria-pressed="${h.id === ui.habitSel}">${esc(h.name)}</button>`).join('');
+  const chips = habits.map((h) => `<button class="chip row" style="gap:6px" data-action="pickHabit" data-id="${h.id}" aria-pressed="${h.id === ui.habitSel}">${icon(h.icon || 'habits', 15)}${esc(h.name)}</button>`).join('');
   const wd = weekDays(t);
   const rows = habits.map((h) => {
-    const dots = wd.map((d) => `<i class="${isChecked(h.id, d) ? 'on' : d > t ? 'future' : ''}"></i>`).join('');
+    const dots = wd.map((d) => { const st = status(h.id, d); return `<i class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : d > t ? 'future' : ''}"></i>`; }).join('');
     const s = streak(h.id);
     return `<div class="list-row">
-      <div class="grow stack" style="gap:1px"><span class="ellipsis" style="font-weight:600">${esc(h.name)}</span>
+      ${habitIcon(h, 32)}
+      <div class="grow stack" style="gap:1px;min-width:0"><span class="ellipsis" style="font-weight:600">${esc(h.name)}</span>
         <span class="small muted">${s ? `серия ${s} ${plural(s, 'день', 'дня', 'дней')}` : 'нет серии'} · ${h.perWeek < 7 ? h.perWeek + '× в неделю' : 'каждый день'}</span></div>
       <div class="dots" aria-label="Эта неделя">${dots}</div>
       <span style="width:40px;text-align:right;font-weight:600;font-size:13px">${Math.round(rate(h.id) * 100)}%</span>
@@ -50,6 +52,8 @@ export function render() {
     <form class="card" data-submit="saveHabit" aria-label="Изменить привычку">
       <div class="row between"><h2>Привычка</h2><button type="button" class="icon-btn" data-action="closeEdit" aria-label="Закрыть">${icon('close', 18)}</button></div>
       <label class="field"><span>Название</span><input class="input" name="name" value="${esc(edit.name)}" required></label>
+      <div class="field"><span>Иконка</span>
+        <div class="icon-grid" role="radiogroup" aria-label="Иконка">${HABIT_ICONS.map((ic) => `<button type="button" role="radio" aria-checked="${(ui.habitIcon || edit.icon || 'habits') === ic}" aria-pressed="${(ui.habitIcon || edit.icon || 'habits') === ic}" aria-label="Иконка: ${ICON_NAMES[ic] || ic}" data-action="pickIcon" data-ic="${ic}">${icon(ic, 20)}</button>`).join('')}</div></div>
       <label class="field"><span>Сколько раз в неделю</span>
         <select class="input" name="perWeek">${[7, 6, 5, 4, 3, 2, 1].map((n) => `<option value="${n}" ${n === edit.perWeek ? 'selected' : ''}>${n === 7 ? 'Каждый день' : n + ' ' + plural(n, 'раз', 'раза', 'раз')}</option>`).join('')}</select></label>
       <div class="row"><button class="btn grow">Сохранить</button><button type="button" class="btn danger" data-action="deleteHabit" data-id="${edit.id}">${icon('trash', 16)}Удалить</button></div>
@@ -66,9 +70,10 @@ export function render() {
   <div class="grid-desk">
     ${sel ? `<section class="card" aria-label="Карта выполнения">
       <div class="chips">${chips}</div>
-      <div class="row between"><span style="font-weight:600">${esc(sel.name)}</span><span class="small muted">${Math.round(rate(sel.id, WEEKS * 7) * 100)}% · можно отмечать прошлые дни</span></div>
+      <div class="row between"><span style="font-weight:600">${esc(sel.name)}</span><span class="small muted">${Math.round(rate(sel.id, WEEKS * 7) * 100)}%</span></div>
       ${heat}
       <div class="row between small muted mono"><span>${WEEKS} недель назад</span><span>сегодня</span></div>
+      <span class="small muted">Нажатие на клетку: выполнено → частично → пусто. Вся история — в разделе <a href="#/stats">Статистика</a>.</span>
     </section>` : ''}
     <section class="card" aria-label="Все привычки" style="gap:0">
       <div class="row between" style="padding-bottom:6px"><span class="label">Эта неделя</span><span class="mono small muted">П В С Ч П С В</span></div>
@@ -84,22 +89,26 @@ export function render() {
 
 export const actions = {
   pickHabit(el) { ui.habitSel = el.dataset.id; commit(() => {}); },
-  heatToggle(el) { commit((s) => toggleCheck(s, ui.habitSel, el.dataset.day)); },
+  heatToggle(el) { commit((s) => cycleStatus(s, ui.habitSel, el.dataset.day)); },
+  pickIcon(el) {
+    ui.habitIcon = el.dataset.ic;
+    el.parentElement.querySelectorAll('button').forEach((b) => { const on = b === el; b.setAttribute('aria-pressed', on); b.setAttribute('aria-checked', on); });
+  },
   focusNewHabit() { document.getElementById('newHabit')?.focus(); },
   addHabit(form) {
     const name = form.name.value.trim();
     if (!name) return;
     const id = uid();
-    commit((s) => s.habits.push({ id, name, perWeek: 7, created: today() }));
+    commit((s) => s.habits.push({ id, name, icon: guessIcon(name), perWeek: 7, created: today() }));
     ui.habitSel = id;
     requestAnimationFrame(() => document.getElementById('newHabit')?.focus());
   },
-  editHabit(el) { ui.habitEdit = el.dataset.id; commit(() => {}); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+  editHabit(el) { ui.habitEdit = el.dataset.id; ui.habitIcon = null; commit(() => {}); window.scrollTo({ top: 0, behavior: 'smooth' }); },
   closeEdit() { ui.habitEdit = null; commit(() => {}); },
   saveHabit(form) {
     const name = form.name.value.trim();
     if (!name) return;
-    commit((s) => { const h = s.habits.find((x) => x.id === ui.habitEdit); if (h) { h.name = name; h.perWeek = Number(form.perWeek.value); } });
+    commit((s) => { const h = s.habits.find((x) => x.id === ui.habitEdit); if (h) { h.name = name; h.perWeek = Number(form.perWeek.value); if (ui.habitIcon) h.icon = ui.habitIcon; } });
     ui.habitEdit = null; commit(() => {});
   },
   deleteHabit(el) {
@@ -108,7 +117,7 @@ export const actions = {
     ui.habitEdit = null;
     commit((s) => {
       s.habits = s.habits.filter((x) => x.id !== h.id);
-      for (const d of Object.keys(s.checks)) { s.checks[d] = s.checks[d].filter((id) => id !== h.id); if (!s.checks[d].length) delete s.checks[d]; }
+      for (const key of ['checks', 'partial']) for (const d of Object.keys(s[key] || {})) { s[key][d] = s[key][d].filter((id) => id !== h.id); if (!s[key][d].length) delete s[key][d]; }
     });
   }
 };

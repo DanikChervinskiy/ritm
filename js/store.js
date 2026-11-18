@@ -16,11 +16,12 @@ function defaults() {
     profile: { name: '', height: null, birthYear: null, sex: '' },
     settings: { theme: 'auto', accent: '#E8613C', restDefault: 90, autoTimer: true, sound: true, weekStart: 1 },
     habits: [
-      { id: uid(), name: 'Утро без телефона', perWeek: 7, created: today() },
-      { id: uid(), name: 'Чтение 20 минут', perWeek: 7, created: today() },
-      { id: uid(), name: '2 литра воды', perWeek: 7, created: today() }
+      { id: uid(), name: 'Утро без телефона', icon: 'phoneoff', perWeek: 7, created: today() },
+      { id: uid(), name: 'Чтение 20 минут', icon: 'book', perWeek: 7, created: today() },
+      { id: uid(), name: '2 литра воды', icon: 'water', perWeek: 7, created: today() }
     ],
-    checks: {},          // { 'YYYY-MM-DD': [habitId, ...] }
+    checks: {},          // { 'YYYY-MM-DD': [habitId, ...] } — выполнено
+    partial: {},         // { 'YYYY-MM-DD': [habitId, ...] } — выполнено частично
     goals: [],           // { id, title, horizon, period, target, current, done, parentId, created }
     exercises: [],       // { id, name, rest }
     workouts: [],        // { id, name, date, startedAt, finishedAt, items: [{ exerciseId, sets: [{ w, r, done }] }] }
@@ -42,6 +43,7 @@ function migrate(data) {
   out.profile = { ...base.profile, ...(data.profile || {}) };
   for (const k of ['habits', 'goals', 'exercises', 'workouts', 'body']) if (!Array.isArray(out[k])) out[k] = [];
   if (!out.checks || typeof out.checks !== 'object') out.checks = {};
+  if (!out.partial || typeof out.partial !== 'object') out.partial = {}; // с v0.2.0: частично выполненные привычки
   out.schema = SCHEMA;
   return out;
 }

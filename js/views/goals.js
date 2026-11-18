@@ -1,7 +1,29 @@
 import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn } from '../ui.js';
-import { today, periodKey, periodTitle, shiftDay, esc, icon, parseNum, plural } from '../util.js';
+import { today, periodKey, periodTitle, shiftDay, esc, icon, parseNum, plural, parseDate, weekDays, fmtShortDate } from '../util.js';
 import { goalsFor, goalProgress, isGoalDone, HORIZONS, parentOptions } from '../logic.js';
+
+// Границы календарного периода: весь год, весь месяц, неделя пн–вс, день.
+function bounds(hz, day) {
+  const d = parseDate(day);
+  const y = d.getFullYear(), m = d.getMonth();
+  if (hz === 'year') return [new Date(y, 0, 1), new Date(y, 11, 31)];
+  if (hz === 'month') return [new Date(y, m, 1), new Date(y, m + 1, 0)];
+  if (hz === 'week') { const w = weekDays(day); return [parseDate(w[0]), parseDate(w[6])]; }
+  return [d, d];
+}
+function timeInfo(hz, day) {
+  const [a, b] = bounds(hz, day);
+  const now = parseDate(today());
+  const fmt = (x) => fmtShortDate(today(x));
+  const span = hz === 'day' ? '' : `${fmt(a)} – ${fmt(b)} ${b.getFullYear()}`;
+  let pct;
+  if (now > b) pct = 1; else if (now < a) pct = 0;
+  else pct = ((now - a) / 864e5 + 1) / ((b - a) / 864e5 + 1);
+  const left = Math.max(0, Math.round((b - now) / 864e5));
+  const note = now > b ? 'период завершён' : now < a ? 'ещё не начался' : hz === 'day' ? 'сегодня' : `прошло ${Math.round(pct * 100)}% · осталось ${left} ${plural(left, 'день', 'дня', 'дней')}`;
+  return { span, note, pct };
+}
 
 export function render() {
   const hz = ui.goalsHorizon;
@@ -10,6 +32,7 @@ export function render() {
   const avg = items.length ? items.reduce((a, g) => a + goalProgress(g), 0) / items.length : 0;
   const doneN = items.filter(isGoalDone).length;
   const isCurrent = periodKey(hz, day) === periodKey(hz, today());
+  const tinfo = timeInfo(hz, day);
 
   const tabs = HORIZONS.map((h) => `<button role="tab" aria-selected="${h.id === hz}" data-action="goalsTab" data-h="${h.id}">${h.name}</button>`).join('');
 
@@ -51,6 +74,10 @@ export function render() {
     <button class="icon-btn" data-action="goalsShift" data-d="-1" aria-label="Предыдущий период">${icon('back', 18)}</button>
     <button class="btn light sm" data-action="goalsNow" ${isCurrent ? 'disabled style="opacity:.5"' : ''}>Текущий период</button>
     <button class="icon-btn" data-action="goalsShift" data-d="1" aria-label="Следующий период">${icon('next', 18)}</button>
+  </div>
+  <div class="stack" style="gap:6px;padding:0 4px">
+    <div class="row between small"><span class="muted">${tinfo.span}</span><span class="muted">${tinfo.note}</span></div>
+    <div class="bar" style="height:4px" aria-hidden="true"><i style="width:${Math.round(tinfo.pct * 100)}%;background:var(--muted)"></i></div>
   </div>
   <section class="card ink" aria-label="Итог периода">
     <div class="row between"><span class="label">${HORIZONS.find((h) => h.id === hz).name}: прогресс</span><span class="small muted">${doneN} из ${items.length} готово</span></div>

@@ -3,64 +3,101 @@ import { state } from './store.js';
 import { today, addDays, weekDays, periodKey } from './util.js';
 
 // ---------- привычки ----------
-export function isChecked(habitId, day) {
-  return (state.checks[day] || []).includes(habitId);
+// Состояние привычки за день: 'done' | 'partial' | null. Частично = половина в статистике.
+export function status(habitId, day) {
+  if ((state.checks[day] || []).includes(habitId)) return 'done';
+  if ((state.partial?.[day] || []).includes(habitId)) return 'partial';
+  return null;
 }
-export function toggleCheck(s, habitId, day) {
-  const arr = s.checks[day] || [];
-  s.checks[day] = arr.includes(habitId) ? arr.filter((x) => x !== habitId) : [...arr, habitId];
-  if (!s.checks[day].length) delete s.checks[day];
+export const isChecked = (habitId, day) => status(habitId, day) === 'done';
+export const isMarked = (habitId, day) => status(habitId, day) != null;
+export const score = (st) => (st === 'done' ? 1 : st === 'partial' ? 0.5 : 0);
+
+export function setStatus(s, habitId, day, st) {
+  for (const key of ['checks', 'partial']) {
+    if (!s[key]) s[key] = {};
+    const arr = (s[key][day] || []).filter((x) => x !== habitId);
+    if ((key === 'checks' && st === 'done') || (key === 'partial' && st === 'partial')) arr.push(habitId);
+    if (arr.length) s[key][day] = arr; else delete s[key][day];
+  }
 }
+// Для тепловой карты: пусто → выполнено → частично → пусто.
+export function cycleStatus(s, habitId, day) {
+  const st = status(habitId, day);
+  setStatus(s, habitId, day, st == null ? 'done' : st === 'done' ? 'partial' : null);
+}
+
+// С какого дня считать привычку: дата создания или самая ранняя отметка (если отмечали прошлое).
+export function habitStart(h) {
+  let start = h.created;
+  for (const key of ['checks', 'partial']) {
+    for (const d of Object.keys(state[key] || {})) if (d < start && state[key][d].includes(h.id)) start = d;
+  }
+  return start;
+}
+
 export function dayProgress(day) {
-  const hs = state.habits.filter((h) => !h.archived && h.created <= day);
-  if (!hs.length) return { done: 0, total: 0 };
-  const done = hs.filter((h) => isChecked(h.id, day)).length;
-  return { done, total: hs.length };
+  const hs = state.habits.filter((h) => !h.archived && habitStart(h) <= day);
+  let done = 0, partial = 0;
+  for (const h of hs) { const st = status(h.id, day); if (st === 'done') done++; else if (st === 'partial') partial++; }
+  return { done, partial, total: hs.length, score: hs.length ? (done + partial / 2) / hs.length : 0 };
 }
 export function streak(habitId) {
   let d = today();
-  if (!isChecked(habitId, d)) d = addDays(d, -1); // сегодня ещё можно успеть
+  if (!isMarked(habitId, d)) d = addDays(d, -1); // сегодня ещё можно успеть
   let n = 0;
-  while (isChecked(habitId, d)) { n++; d = addDays(d, -1); }
+  while (isMarked(habitId, d)) { n++; d = addDays(d, -1); }
   return n;
 }
-export function bestStreak(habitId) {
-  const days = Object.keys(state.checks).filter((k) => state.checks[k].includes(habitId)).sort();
+function markedDays(habitId, from = '0000', to = '9999') {
+  const out = [];
+  for (const key of ['checks', 'partial']) {
+    for (const [d, ids] of Object.entries(state[key] || {})) if (d >= from && d <= to && ids.includes(habitId)) out.push(d);
+  }
+  return [...new Set(out)].sort();
+}
+export function bestStreak(habitId, from, to) {
   let best = 0, cur = 0, prev = null;
-  for (const d of days) {
+  for (const d of markedDays(habitId, from, to)) {
     cur = prev && addDays(prev, 1) === d ? cur + 1 : 1;
     best = Math.max(best, cur);
     prev = d;
   }
   return best;
 }
-export function rate(habitId, days = 30) {
+// Доля выполнения привычки за отрезок дат [from, to] (включительно, не позже сегодня).
+export function rangeStats(habitId, from, to) {
   const h = state.habits.find((x) => x.id === habitId);
-  if (!h) return 0;
-  let total = 0, hit = 0, d = today();
-  for (let i = 0; i < days; i++) {
-    if (d < h.created) break;
-    total++;
-    if (isChecked(habitId, d)) hit++;
-    d = addDays(d, -1);
+  const res = { days: 0, done: 0, partial: 0, rate: null };
+  if (!h) return res;
+  const start = habitStart(h);
+  const end = to < today() ? to : today();
+  for (let d = from < start ? start : from; d <= end; d = addDays(d, 1)) {
+    res.days++;
+    const st = status(habitId, d);
+    if (st === 'done') res.done++; else if (st === 'partial') res.partial++;
   }
-  return total ? hit / total : 0;
+  res.rate = res.days ? (res.done + res.partial / 2) / res.days : null;
+  return res;
+}
+export function rate(habitId, days = 30) {
+  return rangeStats(habitId, addDays(today(), -(days - 1)), today()).rate || 0;
+}
+export function overallRange(from, to, habitIds = null) {
+  let days = 0, pts = 0;
+  for (const h of state.habits) {
+    if (habitIds && !habitIds.includes(h.id)) continue;
+    const r = rangeStats(h.id, from, to);
+    days += r.days; pts += r.done + r.partial / 2;
+  }
+  return days ? pts / days : null;
 }
 export function overallRate(days = 30, offset = 0) {
-  const hs = state.habits.filter((h) => !h.archived);
-  let total = 0, hit = 0, d = addDays(today(), -offset);
-  for (let i = 0; i < days; i++) {
-    for (const h of hs) {
-      if (d < h.created) continue;
-      total++;
-      if (isChecked(h.id, d)) hit++;
-    }
-    d = addDays(d, -1);
-  }
-  return total ? hit / total : null;
+  const to = addDays(today(), -offset);
+  return overallRange(addDays(to, -(days - 1)), to, state.habits.filter((h) => !h.archived).map((h) => h.id));
 }
 export function weekCount(habitId, day = today()) {
-  return weekDays(day).filter((d) => isChecked(habitId, d)).length;
+  return weekDays(day).reduce((a, d) => a + score(status(habitId, d)), 0);
 }
 
 // ---------- цели ----------

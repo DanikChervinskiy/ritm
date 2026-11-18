@@ -129,8 +129,50 @@ const ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M4 20h16"/>',
   upload: '<path d="M12 20V9M7 14l5-5 5 5M4 4h16"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
-  minus: '<path d="M5 12h14"/>'
+  minus: '<path d="M5 12h14"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+  // иконки привычек
+  book: '<path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2 2 2 0 0 0 2 2h13v-2"/>',
+  water: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  run: '<circle cx="14" cy="4.5" r="1.5"/><path d="M9 20l3-5-3-3 3-4 3 3h3M6 13l3-1"/>',
+  walk: '<circle cx="13" cy="4.5" r="1.5"/><path d="M10 21l2-6 3 3v3M12 15l-1-5 4 1 2 3M11 10l-3 2v3"/>',
+  bike: '<circle cx="6" cy="17" r="3.5"/><circle cx="18" cy="17" r="3.5"/><path d="M6 17l4-8h5l3 8M10 9 8 5H6M15 9l-3 8"/>',
+  phoneoff: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M3 3l18 18"/>',
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+  bed: '<path d="M3 18V7M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-8v5"/><circle cx="6.5" cy="11" r="1.5"/>',
+  cross: '<path d="M12 3v18M7 8h10"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  leaf: '<path d="M5 19c0-8 6-14 15-14 0 9-6 15-14 15"/><path d="M5 19l7-7"/>',
+  apple: '<path d="M12 7c-3-2-8-1-8 5s4 9 6 9 2-1 2-1 0 1 2 1 6-3 6-9-5-7-8-5z"/><path d="M12 7c0-2 1-4 3-4"/>',
+  pill: '<path d="M10.5 20.5a5 5 0 0 1-7-7l7-7a5 5 0 0 1 7 7z"/><path d="M8.5 8.5l7 7"/>',
+  music: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
+  money: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
+  broom: '<path d="M14 4l6 6M12 6l6 6-7 7H5v-6z"/>',
+  star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>'
 };
+
+export const HABIT_ICONS = ['habits', 'book', 'water', 'gym', 'run', 'walk', 'bike', 'phoneoff', 'phone', 'sun', 'moon', 'bed',
+  'cross', 'globe', 'leaf', 'apple', 'pill', 'music', 'code', 'money', 'heart', 'pen', 'broom', 'flame', 'star', 'clock'];
+
+// Иконка по названию привычки, если пользователь не выбрал свою.
+export function guessIcon(name) {
+  const n = name.toLowerCase();
+  const rules = [
+    [/чита|чтен|книг|глав/, 'book'], [/вод|пить|стакан/, 'water'], [/зал|трен|отжим|присед|подтяг/, 'gym'], [/бег|пробеж/, 'run'],
+    [/шаг|прогул|ходьб/, 'walk'], [/вело/, 'bike'], [/телефон|соцсет|экран/, 'phoneoff'], [/звон|позвон/, 'phone'],
+    [/утр|подъ[её]м|рассвет/, 'sun'], [/сон|спать|ложить|отбой/, 'bed'], [/молит|библ|церк|служен|бог/, 'cross'],
+    [/англ|язык|french|немец|испан|english/, 'globe'], [/медит|дыхан|растяж|йог/, 'leaf'], [/еда|сладк|питан|завтрак|овощ|фрукт/, 'apple'],
+    [/витамин|таблет|лекар/, 'pill'], [/музык|гитар|пиани/, 'music'], [/код|программ/, 'code'], [/деньг|бюджет|трат|копи/, 'money'],
+    [/дневник|запис|писа/, 'pen'], [/уборк|порядок|убра/, 'broom']
+  ];
+  for (const [re, ic] of rules) if (re.test(n)) return ic;
+  return 'habits';
+}
 export function icon(name, size = 20, extra = '') {
   const sw = name === 'check' ? 'stroke-width="3"' : '';
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" ${P} ${sw} ${extra}>${ICONS[name] || ''}</svg>`;
