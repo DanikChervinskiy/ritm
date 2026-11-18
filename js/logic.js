@@ -138,7 +138,7 @@ export function lastSession(exerciseId, excludeWorkoutId) {
   for (const w of ws) {
     const it = w.items.find((i) => i.exerciseId === exerciseId);
     const sets = it?.sets.filter((s) => s.done && s.w != null && s.r);
-    if (sets && sets.length) return { workout: w, sets };
+    if (sets && sets.length) return { workout: w, sets, item: it };
   }
   return null;
 }
@@ -164,6 +164,15 @@ export function activeWorkout() {
 }
 export function lastFinishedWorkout() {
   return state.workouts.filter((w) => w.finishedAt).sort((a, b) => b.startedAt - a.startedAt)[0] || null;
+}
+
+// Ощущение после упражнения (с v0.6.0): item.feel = 1…5.
+export const FEELS = ['Легко', 'Нормально', 'Тяжело', 'Очень тяжело', 'На пределе'];
+// Вес, который стоит взять сегодня: прошлый вес подхода + пометка «на следующий раз».
+export function plannedWeight(prevSet, prevItem) {
+  if (!prevSet || prevSet.w == null) return null;
+  const add = prevItem?.nextAdd || 0;
+  return Math.max(0, Math.round((prevSet.w + add) * 100) / 100);
 }
 
 // ---------- программы тренировок (с v0.5.0) ----------

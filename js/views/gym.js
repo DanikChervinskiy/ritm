@@ -1,7 +1,7 @@
 import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn } from '../ui.js';
 import { today, esc, icon, kg, parseNum, fmtDuration, fmtLongDate, fmtShortDate, num, plural, toast } from '../util.js';
-import { activeWorkout, exerciseName, lastSession, bestSet, e1rm, workoutVolume, setStatus, nextTemplate, lastTemplateWorkout, guessGymHabit } from '../logic.js';
+import { activeWorkout, exerciseName, lastSession, bestSet, e1rm, workoutVolume, setStatus, FEELS, plannedWeight, nextTemplate, lastTemplateWorkout, guessGymHabit } from '../logic.js';
 import { startRest } from '../rest.js';
 
 export const subnav = (cur) => `<nav class="seg" aria-label="Зал">
@@ -16,12 +16,14 @@ function renderActive(w) {
   const items = w.items.map((it, i) => {
     const last = lastSession(it.exerciseId, w.id);
     const best = bestSet(it.exerciseId, w.id);
+    const lastItem = last?.item;
     const rows = it.sets.map((s, j) => {
       const prev = last?.sets[j];
+      const plan = plannedWeight(prev, lastItem);
       return `<div class="set-row">
         <span style="font-weight:600">${j + 1}</span>
         <span class="small muted ellipsis">${prev ? `${kg(prev.w)} × ${prev.r}` : '—'}</span>
-        <input class="input" inputmode="decimal" aria-label="Вес, подход ${j + 1}" value="${s.w == null ? '' : kg(s.w)}" placeholder="${prev ? kg(prev.w) : 'кг'}" data-change="setField" data-i="${i}" data-j="${j}" data-f="w">
+        <input class="input" inputmode="decimal" aria-label="Вес, подход ${j + 1}" value="${s.w == null ? '' : kg(s.w)}" placeholder="${plan != null ? kg(plan) : 'кг'}" data-change="setField" data-i="${i}" data-j="${j}" data-f="w">
         <input class="input" inputmode="numeric" aria-label="Повторы, подход ${j + 1}" value="${s.r ?? ''}" placeholder="${prev ? prev.r : 'повт'}" data-change="setField" data-i="${i}" data-j="${j}" data-f="r">
         ${checkBtn(!!s.done, 'setDone', { i, j }, (s.done ? 'Снять отметку с подхода ' : 'Подход выполнен: ') + (j + 1))}
       </div>`;
@@ -37,13 +39,25 @@ function renderActive(w) {
     if (doneSets.length && best && doneSets.some((s) => s.w > best.w || (s.w === best.w && s.r > best.r))) {
       hint = `<div class="hint row" style="gap:6px">${icon('trophy', 14)}Новый рекорд!</div>`;
     }
+    // Пометка с прошлого раза: «+N кг» и/или заметка.
+    const planNote = lastItem && (lastItem.nextAdd || lastItem.note)
+      ? `<div class="plan-note"><span class="label" style="color:inherit">План с прошлого раза</span>
+          ${lastItem.nextAdd ? `<span style="font-weight:700">${lastItem.nextAdd > 0 ? '+' : '−'}${kg(Math.abs(lastItem.nextAdd))} кг → ${kg(plannedWeight(last.sets[0], lastItem))} кг</span>` : ''}
+          ${lastItem.note ? `<span>${esc(lastItem.note)}</span>` : ''}</div>`
+      : '';
+    const feelRow = FEELS.map((f, k) => `<button type="button" class="feel${it.feel === k + 1 ? ' on' : ''}" data-action="setFeel" data-i="${i}" data-v="${k + 1}" aria-pressed="${it.feel === k + 1}"><b>${k + 1}</b>${f}</button>`).join('');
+    const addOpts = [2.5, 5];
+    const custom = it.nextAdd && !addOpts.includes(it.nextAdd);
+    const nextRow = addOpts.map((v) => `<button type="button" class="chip sm" data-action="setNextAdd" data-i="${i}" data-v="${v}" aria-pressed="${it.nextAdd === v}">+${kg(v)} кг</button>`).join('')
+      + `<button type="button" class="chip sm" data-action="setNextAdd" data-i="${i}" data-v="custom" aria-pressed="${!!custom}">${custom ? (it.nextAdd > 0 ? '+' : '−') + kg(Math.abs(it.nextAdd)) + ' кг' : 'Другое…'}</button>`;
+    const doneAny = it.sets.some((x) => x.done);
     return `<section class="card" aria-label="${esc(exerciseName(it.exerciseId))}">
       <div class="row between"><h2>${esc(exerciseName(it.exerciseId))}</h2>
         <button class="icon-btn" style="width:36px;height:36px;border:0;background:transparent" data-action="removeItem" data-i="${i}" aria-label="Убрать упражнение">${icon('trash', 16)}</button></div>
       <div class="grid2" style="gap:8px">
         <div class="pill"><span class="small muted row" style="gap:4px">${icon('clock', 12)}Прошлый раз${last ? ' · ' + fmtShortDate(last.workout.date) : ''}</span>
           <span style="font-weight:700">${last ? setsLabel(last.sets.slice(0, 2)) : '—'}</span>
-          <span class="small muted">${last ? `${last.sets.length} ${plural(last.sets.length, 'подход', 'подхода', 'подходов')}` : 'ещё нет истории'}</span></div>
+          <span class="small muted">${last ? `${last.sets.length} ${plural(last.sets.length, 'подход', 'подхода', 'подходов')}${lastItem?.feel ? ' · ' + FEELS[lastItem.feel - 1].toLowerCase() : ''}` : 'ещё нет истории'}</span></div>
         <div class="pill ink"><span class="small muted row" style="gap:4px"><span style="color:var(--accent)">${icon('trophy', 12)}</span>Лучший результат</span>
           <span style="font-weight:700">${best ? `${kg(best.w)} кг × ${best.r}` : '—'}</span>
           <span class="small muted">${best ? `1ПМ ≈ ${num(e1rm(best.w, best.r), 0)} кг · ${fmtShortDate(best.date)}` : 'появится после подхода'}</span></div>
@@ -52,8 +66,18 @@ function renderActive(w) {
         <div class="set-row head mono small muted"><span>#</span><span>Прошлый</span><span>кг</span><span>Повт.</span><span></span></div>
         ${rows}
       </div>
+      ${planNote}
       ${hint}
       <button class="btn light sm" data-action="addSet" data-i="${i}">${icon('plus', 16)}Подход</button>
+      <details class="after" ${doneAny || it.feel || it.nextAdd || it.note ? 'open' : ''}>
+        <summary class="small muted">Как было и что в следующий раз</summary>
+        <div class="stack" style="gap:10px;margin-top:10px">
+          <div class="field"><span>Насколько было тяжело</span><div class="feels" role="group" aria-label="Ощущение">${feelRow}</div></div>
+          <div class="field"><span>В следующий раз добавить вес</span><div class="row" style="gap:6px;flex-wrap:wrap">${nextRow}</div></div>
+          <label class="field"><span>Заметка на следующий раз</span>
+            <input class="input" value="${esc(it.note || '')}" placeholder="например: держать локти, медленнее вниз" data-change="setNote" data-i="${i}" autocomplete="off" maxlength="140"></label>
+        </div>
+      </details>
     </section>`;
   }).join('');
 
@@ -235,10 +259,11 @@ export const actions = {
     const set = it.sets[j];
     const willBeDone = !set.done;
     // Пустые поля заполняем значениями из прошлого раза (как подсказка в плейсхолдере).
-    const prev = lastSession(it.exerciseId, w.id)?.sets[j];
+    const ls = lastSession(it.exerciseId, w.id);
+    const prev = ls?.sets[j];
     commit(() => {
       if (willBeDone) {
-        if (set.w == null && prev) set.w = prev.w;
+        if (set.w == null && prev) set.w = plannedWeight(prev, ls.item);
         if (set.r == null && prev) set.r = prev.r;
       }
       set.done = willBeDone;
@@ -280,6 +305,29 @@ export const actions = {
 };
 
 Object.assign(actions, {
+  setFeel(el) {
+    const i = Number(el.dataset.i), v = Number(el.dataset.v);
+    commit((s) => { const it = s.workouts.find((x) => x.id === s.activeWorkoutId).items[i]; if (it.feel === v) delete it.feel; else it.feel = v; });
+  },
+  setNextAdd(el) {
+    const i = Number(el.dataset.i);
+    const it = activeWorkout().items[i];
+    let v;
+    if (el.dataset.v === 'custom') {
+      if (it.nextAdd && ![2.5, 5].includes(it.nextAdd)) v = null; // повторное нажатие — снять
+      else {
+        const ans = prompt('Сколько кг добавить в следующий раз? (можно с минусом, чтобы уменьшить)', '1');
+        if (ans == null) return;
+        v = parseNum(ans);
+        if (!v) return;
+      }
+    } else v = it.nextAdd === Number(el.dataset.v) ? null : Number(el.dataset.v);
+    commit((s) => { const x = s.workouts.find((y) => y.id === s.activeWorkoutId).items[i]; if (v) x.nextAdd = v; else delete x.nextAdd; });
+  },
+  setNote(el) {
+    const i = Number(el.dataset.i), v = el.value.trim().slice(0, 140);
+    commit((s) => { const x = s.workouts.find((y) => y.id === s.activeWorkoutId).items[i]; if (v) x.note = v; else delete x.note; }, { render: false });
+  },
   startTemplate(el) {
     const t = state.templates.find((x) => x.id === el.dataset.id);
     if (!t || !t.items.length) { toast('Сначала добавь упражнения в программу'); return; }

@@ -282,6 +282,14 @@ hr.cat-div { border: 0; height: 1px; background: var(--muted); opacity: .35; mar
 .pill.ink { background: var(--ink); color: var(--on-ink); }
 .pill.ink .muted { color: var(--ink-muted); }
 :root:not([data-theme="dark"]) .pill.ink .muted { color: #BDBDB8; }
+.chip.sm { height: 32px; padding: 0 12px; font-size: 12px; }
+.feels { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.feel { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 54px; padding: 6px 2px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 10.5px; line-height: 1.15; text-align: center; cursor: pointer; }
+.feel b { font-size: 16px; }
+.feel.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.feel.on:nth-child(4), .feel.on:nth-child(5) { background: var(--accent); border-color: var(--accent); color: #fff; }
+details.after > summary { cursor: pointer; padding: 2px 0; }
+.plan-note { display: flex; flex-direction: column; gap: 2px; background: var(--card-2); border-left: 3px solid var(--accent); border-radius: 12px; padding: 8px 12px; font-size: 13px; }
 .chip-dark { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 11px; border-radius: 15px; border: 1px solid #3A3A37; background: transparent; color: inherit; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .tag-next { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: var(--accent); color: #fff; border-radius: 8px; padding: 2px 7px; }
 .hint { background: #FDF0EB; color: #9A3412; border-radius: 12px; padding: 8px 10px; font-size: 12px; }
