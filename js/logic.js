@@ -166,6 +166,25 @@ export function lastFinishedWorkout() {
   return state.workouts.filter((w) => w.finishedAt).sort((a, b) => b.startedAt - a.startedAt)[0] || null;
 }
 
+// ---------- программы тренировок (с v0.5.0) ----------
+// state.templates[] = { id, name, items: [{ exerciseId, sets }], habitId? }
+export function lastTemplateWorkout(tplId) {
+  return state.workouts.filter((w) => w.finishedAt && w.templateId === tplId).sort((a, b) => b.startedAt - a.startedAt)[0] || null;
+}
+// Следующая по кругу: после последней сделанной программы идёт следующая в списке.
+export function nextTemplate() {
+  const t = state.templates || [];
+  if (!t.length) return null;
+  const last = state.workouts.filter((w) => w.finishedAt && t.some((x) => x.id === w.templateId)).sort((a, b) => b.startedAt - a.startedAt)[0];
+  if (!last) return t[0];
+  return t[(t.findIndex((x) => x.id === last.templateId) + 1) % t.length];
+}
+// Привычка «зал/тренировка» по умолчанию для новой программы.
+export function guessGymHabit() {
+  const hs = state.habits.filter((h) => !h.archived);
+  return (hs.find((h) => h.icon === 'gym') || hs.find((h) => /зал|трен|спорт|качал/i.test(h.name)))?.id || null;
+}
+
 // ---------- тело ----------
 export const METRICS = [
   { k: 'weight', name: 'Вес', unit: 'кг', dec: 1, good: -1 },

@@ -2,7 +2,7 @@ import { state, commit, uid } from '../store.js';
 import { ui, header, checkBtn, habitBtn, habitIcon } from '../ui.js';
 import { today, weekDays, parseDate, WD_SHORT, fmtLongDate, esc, icon, ring, plural, num } from '../util.js';
 import { renderGrouped } from '../categories.js';
-import { status, dayProgress, streak, weekCount, goalsFor, isGoalDone, activeWorkout, lastFinishedWorkout } from '../logic.js';
+import { status, dayProgress, streak, weekCount, goalsFor, isGoalDone, activeWorkout, lastFinishedWorkout, nextTemplate, exerciseName } from '../logic.js';
 
 export function render() {
   const sel = ui.selDay;
@@ -46,9 +46,16 @@ export function render() {
 
   const aw = activeWorkout();
   const lw = lastFinishedWorkout();
+  const nt = nextTemplate();
+  const others = state.templates.filter((x) => nt && x.id !== nt.id);
   const gym = aw
     ? `<span class="label">Зал · идёт тренировка</span><span style="font-size:18px;font-weight:700">${esc(aw.name || 'Тренировка')}</span>
        <a class="btn white sm" href="#/gym" style="margin-top:auto">${icon('play', 14)}Продолжить</a>`
+    : nt
+    ? `<span class="label">Зал · следующая тренировка</span><span style="font-size:18px;font-weight:700;line-height:1.15">${esc(nt.name)}</span>
+       <span class="small muted">${nt.items.length ? esc(nt.items.slice(0, 3).map((it) => exerciseName(it.exerciseId)).join(' · ')) + (nt.items.length > 3 ? ' · ещё ' + (nt.items.length - 3) : '') : 'упражнений пока нет'}${lw ? ' · прошлая: ' + fmtLongDate(lw.date).toLowerCase() : ''}</span>
+       ${others.length ? `<div class="row" style="gap:6px;flex-wrap:wrap">${others.map((x) => `<button class="chip-dark" data-action="startTemplate" data-id="${x.id}" aria-label="Начать: ${esc(x.name)}">${icon('play', 11)}${esc(x.name)}</button>`).join('')}</div>` : ''}
+       <button class="btn white sm" data-action="startTemplate" data-id="${nt.id}" style="margin-top:auto">${icon('play', 14)}Начать</button>`
     : `<span class="label">Зал</span><span style="font-size:18px;font-weight:700;line-height:1.15">${lw ? esc(lw.name || 'Тренировка') : 'Первая тренировка'}</span>
        <span class="small muted">${lw ? 'прошлая: ' + fmtLongDate(lw.date).toLowerCase() : 'вес и подходы сохранятся'}</span>
        <button class="btn white sm" data-action="quickStartWorkout" style="margin-top:auto">${icon('play', 14)}Начать</button>`;
