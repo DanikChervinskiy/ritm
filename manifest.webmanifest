@@ -1,0 +1,22 @@
+{
+  "name": "Ритм — привычки, цели, зал",
+  "short_name": "Ритм",
+  "description": "Личный трекер: привычки, цели на год/месяц/неделю/день, тренировки и вес.",
+  "lang": "ru",
+  "start_url": "./#/today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F2F2EF",
+  "theme_color": "#F2F2EF",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Привычки", "url": "./#/today" },
+    { "name": "Тренировка", "url": "./#/gym" },
+    { "name": "Взвешивание", "url": "./#/body" }
+  ]
+}
