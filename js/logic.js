@@ -156,8 +156,27 @@ export function bestSet(exerciseId, excludeWorkoutId) {
   }
   return best;
 }
+// Единица веса упражнения (с v0.7.1): кг, ф (деления/блины тренажёра без перевода в кг),
+// блин (штуки), сек (вес в кг, а вместо повторов — секунды).
+export const UNITS = {
+  'кг': { w: 'кг', r: 'Повт.', steps: [2.5, 5] },
+  'ф': { w: 'ф', r: 'Повт.', steps: [5, 10] },
+  'блин': { w: 'бл.', r: 'Повт.', steps: [1] },
+  'сек': { w: 'кг', r: 'Сек.', steps: [10] }
+};
+export const UNIT_ORDER = ['кг', 'ф', 'блин', 'сек'];
+export function unitOf(exerciseId) {
+  const e = state.exercises.find((x) => x.id === exerciseId);
+  if (e?.unit && UNITS[e.unit]) return e.unit;
+  const n = e?.name || '';
+  if (/\(ф\)\s*$/i.test(n)) return 'ф';
+  if (/\(блины\)\s*$/i.test(n)) return 'блин';
+  if (/\(сек\)\s*$/i.test(n)) return 'сек';
+  return 'кг';
+}
+// Объём считаем только по упражнениям в килограммах.
 export function workoutVolume(w) {
-  return w.items.reduce((a, it) => a + it.sets.reduce((b, s) => b + (s.done && s.w && s.r ? s.w * s.r : 0), 0), 0);
+  return w.items.filter((it) => unitOf(it.exerciseId) === 'кг').reduce((a, it) => a + it.sets.reduce((b, s) => b + (s.done && s.w && s.r ? s.w * s.r : 0), 0), 0);
 }
 export function activeWorkout() {
   return state.workouts.find((w) => w.id === state.activeWorkoutId) || null;
