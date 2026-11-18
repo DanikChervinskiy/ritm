@@ -351,3 +351,13 @@ svg { flex: none; }
 .drag-handle:focus-visible { outline: 2px solid var(--accent); }
 html.sorting-now, html.sorting-now * { cursor: grabbing !important; }
 html.sorting-now { -webkit-user-select: none; user-select: none; }
+
+/* Перетаскивание привычек и категорий (v0.11.0) */
+.sort-list { display: flex; flex-direction: column; }
+.sort-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; background: var(--card); transition: box-shadow .15s, transform .15s; }
+.sort-row.dragging { position: relative; z-index: 5; transform: scale(1.02); box-shadow: 0 10px 28px rgba(0,0,0,.16); border-radius: 14px; border-color: transparent; padding-left: 8px; padding-right: 8px; margin: 0 -8px; }
+.sort-head { border-top: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); margin-top: 8px; padding-top: 12px; }
+.sort-head.first { border-top: 0; margin-top: 0; padding-top: 4px; }
+.sort-head + .list-row { border-top: 0; }
+.sort-head.empty { display: none; }
+.sort-list.sorting .sort-head.empty { display: flex; }

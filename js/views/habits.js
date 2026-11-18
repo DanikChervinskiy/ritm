@@ -1,7 +1,7 @@
 import { state, commit, uid } from '../store.js';
 import { ui, header, habitIcon } from '../ui.js';
 import { today, addDays, weekStart, weekDays, esc, icon, fmtLongDate, plural, HABIT_ICONS, guessIcon } from '../util.js';
-import { renderGrouped, categorySelect, categoryManager } from '../categories.js';
+import { renderSortable, categorySelect, categoryManager } from '../categories.js';
 import { status, cycleStatus, streak, bestStreak, rate, overallRate, isDue, hasDays, daysLabel, WD_NAMES } from '../logic.js';
 
 const WEEKS = 15;
@@ -36,18 +36,18 @@ export function render() {
 
   const chips = habits.map((h) => `<button class="chip row" style="gap:6px" data-action="pickHabit" data-id="${h.id}" aria-pressed="${h.id === ui.habitSel}">${icon(h.icon || 'habits', 15)}${esc(h.name)}</button>`).join('');
   const wd = weekDays(t);
-  const rows = renderGrouped(habits, 'habit', (h) => {
+  const rows = renderSortable(habits, 'habit', (h) => {
     const dots = wd.map((d) => { const st = status(h.id, d); return `<i class="${st === 'done' ? 'on' : st === 'partial' ? 'part' : !isDue(h, d) ? 'off' : d > t ? 'future' : ''}"></i>`; }).join('');
     const s = streak(h.id);
-    return `<div class="list-row">
+    return `<div class="list-row sort-row" data-sort-item="${h.id}">
       ${habitIcon(h, 32)}
-      <div class="grow stack" style="gap:1px;min-width:0"><span class="ellipsis" style="font-weight:600">${esc(h.name)}</span>
+      <div class="grow stack" style="gap:1px;min-width:0"><span style="font-weight:600;overflow-wrap:anywhere;line-height:1.25">${esc(h.name)}</span>
         <span class="small muted">${s ? `серия ${s} ${plural(s, 'день', 'дня', 'дней')}` : 'нет серии'} · ${hasDays(h) ? daysLabel(h) : h.perWeek < 7 ? h.perWeek + '× в неделю' : 'каждый день'}</span></div>
       <div class="dots" aria-label="Эта неделя">${dots}</div>
       <span style="width:40px;text-align:right;font-weight:600;font-size:13px">${Math.round(rate(h.id) * 100)}%</span>
       <button class="icon-btn" style="width:36px;height:36px;border:0;background:transparent" data-action="editHabit" data-id="${h.id}" aria-label="Изменить: ${esc(h.name)}">${icon('next', 16)}</button>
     </div>`;
-  });
+  }, 'habits');
 
   const edit = state.habits.find((h) => h.id === ui.habitEdit);
   if (edit && !ui.habitDays) ui.habitDays = [...(edit.days || [])];
@@ -85,7 +85,8 @@ export function render() {
     </section>` : ''}
     <section class="card" aria-label="Все привычки" style="gap:0">
       <div class="row between" style="padding-bottom:6px"><span class="label">Эта неделя</span><span class="mono small muted">П В С Ч П С В</span></div>
-      ${rows || '<div class="empty">Добавь первую привычку ниже</div>'}
+      ${habits.length ? rows : '<div class="empty">Добавь первую привычку ниже</div>'}
+      ${habits.length > 1 ? '<span class="small muted" style="padding:8px 0 0">Зажми привычку и перетащи — можно и в другую категорию.</span>' : ''}
       <form class="stack" data-submit="addHabit" style="gap:8px;margin-top:8px">
         <div class="addbar" style="background:var(--card-2)">
           <label class="sr-only" for="newHabit">Новая привычка</label>

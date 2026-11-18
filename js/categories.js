@@ -3,6 +3,7 @@
 // у привычки и цели — необязательное поле categoryId.
 import { state, commit, uid } from './store.js';
 import { esc, icon } from './util.js';
+import { onSort } from './drag.js';
 
 export function categoriesOf(kind) {
   return (state.categories || []).filter((c) => c.kind === kind);
@@ -32,6 +33,26 @@ export function renderGrouped(items, kind, renderItem, { count = true } = {}) {
     </div>`).join('');
 }
 
+// Список, который можно перетаскивать (v0.11.0): заголовки категорий — плоско в одном контейнере,
+// чтобы строку можно было перенести в другую категорию. Пустые категории видны только во время перетаскивания.
+// renderItem(item) должен вернуть строку с атрибутом data-sort-item="<id>".
+export function renderSortable(items, kind, renderItem, name, { count = true } = {}) {
+  const cats = categoriesOf(kind);
+  const ids = new Set(cats.map((c) => c.id));
+  if (!cats.length) return `<div class="sort-list" data-sortable="${name}">${items.map(renderItem).join('')}</div>`;
+  const rest = items.filter((x) => !x.categoryId || !ids.has(x.categoryId));
+  const head = (id, title, n, first) => `<div class="cat-head sort-head${n ? '' : ' empty'}${first ? ' first' : ''}" data-sort-head="${id}"><span class="label">${esc(title)}</span>${count ? `<span class="mono small muted">${n}</span>` : ''}</div>`;
+  let html = '';
+  let shown = 0;
+  for (const c of cats) {
+    const its = items.filter((x) => x.categoryId === c.id);
+    html += head(c.id, c.name, its.length, !shown) + its.map(renderItem).join('');
+    if (its.length) shown++;
+  }
+  html += head('', 'Без категории', rest.length, !shown) + rest.map(renderItem).join('');
+  return `<div class="sort-list" data-sortable="${name}">${html}</div>`;
+}
+
 // Поле выбора категории: «Без категории», существующие и «+ Новая категория…».
 export function categorySelect(kind, selectedId = '', { name = 'categoryId', id = '' } = {}) {
   const opts = categoriesOf(kind).map((c) => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
@@ -47,16 +68,15 @@ function askName(current = '') {
 // Карточка управления категориями (переименовать, порядок, удалить, добавить).
 export function categoryManager(kind, toggleKey, ui) {
   const cats = categoriesOf(kind);
-  const rows = cats.map((c, i) => `<div class="list-row" style="min-height:44px;padding:6px 0">
+  const rows = cats.map((c) => `<div class="list-row sort-row" style="min-height:44px;padding:6px 0;gap:8px" data-sort-item="${c.id}">
+      <span class="drag-handle" data-sort-handle tabindex="0" role="button" aria-label="Переместить категорию ${esc(c.name)}. Потяни или нажимай стрелки вверх и вниз">${icon('grip', 16)}</span>
       <span class="grow" style="font-weight:600">${esc(c.name)}</span>
-      <button type="button" class="icon-btn" style="width:34px;height:34px" data-action="catMove" data-id="${c.id}" data-d="-1" ${i ? '' : 'disabled'} aria-label="Выше: ${esc(c.name)}">${icon('up', 15)}</button>
-      <button type="button" class="icon-btn" style="width:34px;height:34px" data-action="catMove" data-id="${c.id}" data-d="1" ${i < cats.length - 1 ? '' : 'disabled'} aria-label="Ниже: ${esc(c.name)}">${icon('down', 15)}</button>
       <button type="button" class="icon-btn" style="width:34px;height:34px" data-action="catRename" data-id="${c.id}" aria-label="Переименовать: ${esc(c.name)}">${icon('pen', 15)}</button>
       <button type="button" class="icon-btn" style="width:34px;height:34px;border:0;background:transparent" data-action="catDelete" data-id="${c.id}" aria-label="Удалить категорию: ${esc(c.name)}">${icon('trash', 15)}</button>
     </div>`).join('');
   return `<details class="card" ${ui[toggleKey] ? 'open' : ''} data-toggle="${toggleKey}">
     <summary class="row between"><span>Категории</span><span class="small muted">${cats.length || 'нет'}</span></summary>
-    <div>${rows || '<div class="small muted" style="padding:4px 0">Категорий пока нет</div>'}</div>
+    ${rows ? `<div class="sort-list" data-sortable="cats-${kind}">${rows}</div>${cats.length > 1 ? '<span class="small muted" style="padding:6px 0 0">Зажми категорию (или потяни за ⋮⋮) и перетащи — в таком порядке группы идут в списках.</span>' : ''}` : '<div class="small muted" style="padding:4px 0">Категорий пока нет</div>'}
     <form class="addbar" data-submit="catAdd" data-kind="${kind}" style="background:var(--card-2)">
       <label class="sr-only" for="newCat-${kind}">Новая категория</label>
       <input id="newCat-${kind}" name="name" placeholder="Новая категория…" autocomplete="off" maxlength="40">
@@ -93,7 +113,7 @@ export const categoryActions = {
     const name = askName(c.name);
     if (name) commit(() => { c.name = name; });
   },
-  catMove(el) {
+  catMove(el) { // клавиатура/старые ссылки — оставлено на всякий случай
     commit((s) => {
       const c = s.categories.find((x) => x.id === el.dataset.id);
       if (!c) return;
@@ -114,3 +134,32 @@ export const categoryActions = {
     });
   }
 };
+
+// Новый порядок категорий одного вида; категории другого вида остаются на своих местах.
+function reorderCats(kind, order) {
+  commit((s) => {
+    const byId = new Map(s.categories.map((c) => [c.id, c]));
+    const sorted = order.map((o) => byId.get(o.key)).filter((c) => c && c.kind === kind);
+    if (sorted.length !== s.categories.filter((c) => c.kind === kind).length) return;
+    let k = 0;
+    s.categories = s.categories.map((c) => (c.kind === kind ? sorted[k++] : c));
+  });
+}
+onSort('cats-habit', (order) => reorderCats('habit', order));
+onSort('cats-goal', (order) => reorderCats('goal', order));
+
+// Перетаскивание привычек: порядок и перенос в другую категорию.
+onSort('habits', (order) => {
+  commit((s) => {
+    const byId = new Map(s.habits.map((h) => [h.id, h]));
+    const moved = [];
+    for (const { key, group } of order) {
+      const h = byId.get(key);
+      if (!h) continue;
+      if (group) h.categoryId = group; else delete h.categoryId;
+      moved.push(h);
+      byId.delete(key);
+    }
+    s.habits = [...moved, ...byId.values()]; // архивные и прочие — в конце, как были
+  });
+});
